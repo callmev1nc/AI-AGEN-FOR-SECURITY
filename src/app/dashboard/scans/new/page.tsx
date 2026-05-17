@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { trpcClient } from "@/lib/trpc-client";
 
 const scanLevels = [
   {
@@ -83,14 +84,17 @@ export default function NewScanPage() {
     }
 
     setLoading(true);
-    // TODO: Call tRPC mutation to create scan
-    // const scan = await trpcClient.scan.create.mutate({ targetUrl: normalizedUrl, scanLevel: level });
-    // router.push(`/dashboard/scans/${scan.id}`);
-
-    // Placeholder redirect for now
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 1500);
+    try {
+      const scan = await trpcClient.scan.create.mutate({
+        targetUrl: normalizedUrl,
+        scanLevel: level,
+      });
+      router.push(`/dashboard/scans/${scan.id}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create scan";
+      setError(message);
+      setLoading(false);
+    }
   }
 
   return (

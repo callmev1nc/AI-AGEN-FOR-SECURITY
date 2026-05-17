@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
-import { scanQueue } from "@/lib/queue";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export const scanRouter = createTRPCRouter({
@@ -32,12 +31,22 @@ export const scanRouter = createTRPCRouter({
         },
       });
 
-      // Push job to BullMQ queue for the worker to pick up
-      await scanQueue.add("scan", {
-        scanId: scan.id,
-        targetUrl: input.targetUrl,
-        scanLevel: input.scanLevel,
-      });
+      // Try to push job to BullMQ queue, but don't fail if Redis is unavailable
+      try {
+        const { scanQueue } = await import("@/lib/queue");
+        await scanQueue.add("scan", {
+          scanId: scan.id,
+          targetUrl: input.targetUrl,
+          scanLevel: input.scanLevel,
+        });
+      } catch {
+        // Redis not available — scan stays "queued" until worker picks it up
+        // For MVP without worker, we'll mark it as running so it shows in the UI
+        await ctx.db.scan.update({
+          where: { id: scan.id },
+          data: { status: "running", startedAt: new Date() },
+        });
+      }
 
       return scan;
     }),

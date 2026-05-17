@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const navItems = [
   {
@@ -49,6 +51,30 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState("");
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUserEmail(data.user.email ?? "");
+        setUserName(
+          data.user.user_metadata?.name ||
+            data.user.email?.split("@")[0] ||
+            "User"
+        );
+      }
+    });
+  }, []);
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -114,14 +140,23 @@ export default function DashboardLayout({
           <div className="border-t border-[var(--border)] px-4 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--bg-card)] text-xs font-medium text-[var(--text-secondary)]">
-                U
+                {userName.charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">User</div>
+                <div className="truncate text-sm font-medium">{userName}</div>
                 <div className="truncate text-xs text-[var(--text-muted)]">
-                  Free plan
+                  {userEmail}
                 </div>
               </div>
+              <button
+                onClick={handleSignOut}
+                className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-white"
+                title="Sign out"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>

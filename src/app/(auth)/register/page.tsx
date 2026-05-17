@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,8 +17,24 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    // TODO: Supabase auth signUp + create user profile
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+      },
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
     router.push("/dashboard");
+    router.refresh();
   }
 
   return (
