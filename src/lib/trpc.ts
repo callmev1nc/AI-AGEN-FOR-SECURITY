@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { createClient as createSupabaseClient } from "@/lib/supabase/server";
-import { db } from "@/lib/db";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function createTRPCContext() {
   const supabase = await createSupabaseClient();
@@ -9,7 +9,9 @@ export async function createTRPCContext() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { db, supabase, user };
+  const admin = createAdminClient();
+
+  return { admin, supabase, user };
 }
 
 const t = initTRPC.context<typeof createTRPCContext>().create({

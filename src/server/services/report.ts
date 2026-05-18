@@ -1,18 +1,22 @@
 import React from "react";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { SecurityReport } from "@/components/report/pdf-template";
-import { db } from "@/lib/db";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function generatePdfReport(scanId: string, userId: string) {
-  const scan = await db.scan.findUnique({
-    where: { id: scanId, userId },
-    include: { vulnerabilities: true },
-  });
+  const admin = createAdminClient();
 
-  if (!scan) throw new Error("Scan not found");
+  const { data: scan, error } = await admin
+    .from("scans")
+    .select("*, vulnerabilities(*)")
+    .eq("id", scanId)
+    .eq("userId", userId)
+    .single();
+
+  if (error || !scan) throw new Error("Scan not found");
   if (scan.status !== "completed") throw new Error("Scan not completed");
 
-  const vulnerabilities = scan.vulnerabilities.map((v) => ({
+  const vulnerabilities = scan.vulnerabilities.map((v: Record<string, unknown>) => ({
     severity: v.severity,
     category: v.category,
     title: v.title,
@@ -34,18 +38,18 @@ export async function generatePdfReport(scanId: string, userId: string) {
 
   const storagePath = `reports/${userId}/${scanId}-${Date.now()}.pdf`;
 
-  // TODO: Upload to Supabase Storage when configured
-  // const supabase = createSupabaseClient();
-  // await supabase.storage.from('reports').upload(storagePath, buffer, { contentType: 'application/pdf' });
-
-  const report = await db.report.create({
-    data: {
+  const { data: report, error: reportError } = await admin
+    .from("reports")
+    .insert({
       scanId,
       userId,
       format: "pdf",
       storagePath,
-    },
-  });
+    })
+    .select()
+    .single();
+
+  if (reportError) throw new Error(reportError.message);
 
   return { report, buffer };
 }

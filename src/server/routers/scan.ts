@@ -12,7 +12,6 @@ export const scanRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Rate limit: 5 scans per hour
       const rateLimit = await checkRateLimit(`scan:${ctx.user.id}`);
       if (!rateLimit.success) {
         throw new TRPCError({
@@ -21,17 +20,23 @@ export const scanRouter = createTRPCRouter({
         });
       }
 
-      const scan = await ctx.db.scan.create({
-        data: {
+      const { data: scan, error } = await ctx.admin
+        .from("scans")
+        .insert({
           userId: ctx.user.id,
           targetUrl: input.targetUrl,
           scanLevel: input.scanLevel,
           scanType: "website",
           status: "queued",
-        },
-      });
+        })
+        .select()
+        .single();
 
-      // Try to push job to BullMQ queue, but don't fail if Redis is unavailable
+      if (error) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+
+      // Try BullMQ queue, fall back to marking as running
       try {
         const { scanQueue } = await import("@/lib/queue");
         await scanQueue.add("scan", {
@@ -40,46 +45,69 @@ export const scanRouter = createTRPCRouter({
           scanLevel: input.scanLevel,
         });
       } catch {
-        // Redis not available — scan stays "queued" until worker picks it up
-        // For MVP without worker, we'll mark it as running so it shows in the UI
-        await ctx.db.scan.update({
-          where: { id: scan.id },
-          data: { status: "running", startedAt: new Date() },
-        });
+        await ctx.admin
+          .from("scans")
+          .update({ status: "running", startedAt: new Date().toISOString() })
+          .eq("id", scan.id);
       }
 
       return scan;
     }),
 
   list: protectedProcedure.query(async ({ ctx }) => {
-    const scans = await ctx.db.scan.findMany({
-      where: { userId: ctx.user.id },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
-    return scans;
+    const { data, error } = await ctx.admin
+      .from("scans")
+      .select("*")
+      .eq("userId", ctx.user.id)
+      .order("createdAt", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+    }
+    return data;
   }),
 
   byId: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }) => {
-      const scan = await ctx.db.scan.findUnique({
-        where: { id: input.id, userId: ctx.user.id },
-        include: { vulnerabilities: true },
-      });
+      const { data: scan, error } = await ctx.admin
+        .from("scans")
+        .select("*, vulnerabilities(*)")
+        .eq("id", input.id)
+        .eq("userId", ctx.user.id)
+        .single();
+
+      if (error) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Scan not found" });
+      }
       return scan;
     }),
 
   getVulnerabilities: protectedProcedure
     .input(z.object({ scanId: z.string() }))
     .query(async ({ ctx, input }) => {
-      const vulnerabilities = await ctx.db.vulnerability.findMany({
-        where: { scanId: input.scanId },
-        orderBy: [
-          { severity: "asc" }, // critical first
-          { category: "asc" },
-        ],
-      });
-      return vulnerabilities;
+      // Verify the scan belongs to the user
+      const { data: scan } = await ctx.admin
+        .from("scans")
+        .select("id")
+        .eq("id", input.scanId)
+        .eq("userId", ctx.user.id)
+        .single();
+
+      if (!scan) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Scan not found" });
+      }
+
+      const { data, error } = await ctx.admin
+        .from("vulnerabilities")
+        .select("*")
+        .eq("scanId", input.scanId)
+        .order("severity", { ascending: true });
+
+      if (error) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+      return data;
     }),
 });
