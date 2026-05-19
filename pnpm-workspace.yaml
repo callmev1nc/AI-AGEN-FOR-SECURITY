@@ -1,5 +1,3 @@
-packages:
-  - "worker"
 allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true

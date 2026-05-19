@@ -9,7 +9,6 @@ function getRatelimit() {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  // If Upstash isn't configured, fall back gracefully
   if (!url || !token) return null;
 
   const redis = new Redis({ url, token });
@@ -22,6 +21,29 @@ function getRatelimit() {
   return ratelimit;
 }
 
+const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 60 * 60 * 1000;
+const MAX_REQUESTS = 5;
+
+function checkInMemory(identifier: string) {
+  const now = Date.now();
+  const entry = inMemoryStore.get(identifier);
+
+  if (!entry || now > entry.resetAt) {
+    inMemoryStore.set(identifier, { count: 1, resetAt: now + WINDOW_MS });
+    return { success: true, limit: MAX_REQUESTS, remaining: MAX_REQUESTS - 1, reset: now + WINDOW_MS };
+  }
+
+  entry.count++;
+  const remaining = Math.max(0, MAX_REQUESTS - entry.count);
+  return {
+    success: entry.count <= MAX_REQUESTS,
+    limit: MAX_REQUESTS,
+    remaining,
+    reset: entry.resetAt,
+  };
+}
+
 export async function checkRateLimit(identifier: string): Promise<{
   success: boolean;
   limit: number;
@@ -31,7 +53,7 @@ export async function checkRateLimit(identifier: string): Promise<{
   const limiter = getRatelimit();
 
   if (!limiter) {
-    return { success: true, limit: Infinity, remaining: Infinity, reset: 0 };
+    return checkInMemory(identifier);
   }
 
   const result = await limiter.limit(identifier);

@@ -10,7 +10,6 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "worker:dev": "cd worker && pnpm dev",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio"
@@ -27,10 +26,8 @@
     "@trpc/tanstack-react-query": "^11.17.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
-    "bullmq": "^5",
     "class-variance-authority": "^0.7",
     "clsx": "^2",
-    "ioredis": "^5",
     "lucide-react": "^1.16",
     "next": "16.2.6",
     "prisma": "^6",

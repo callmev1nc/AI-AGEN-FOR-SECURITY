@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { calculateScore, formatDuration } from "../../worker/src/engine";
-import type { VulnerabilityResult } from "../../worker/src/scanners/types";
+import { calculateScore, formatDuration } from "@/lib/scan-runner";
+import type { VulnerabilityResult } from "@/lib/scanners/types";
 
 describe("calculateScore", () => {
   it("returns 100 when there are no findings", () => {

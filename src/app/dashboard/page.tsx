@@ -16,13 +16,34 @@ type Scan = {
 export default function DashboardPage() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState("");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   useEffect(() => {
-    trpcClient.scan.list.query().then((data) => {
-      setScans(data as Scan[]);
+    trpcClient.scan.list.query({ limit: 10 }).then((data) => {
+      setScans(data.items as Scan[]);
+      setNextCursor(data.nextCursor);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : "Failed to load scans");
+      setLoading(false);
+    });
   }, []);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const data = await trpcClient.scan.list.query({ limit: 10, cursor: nextCursor });
+      setScans((prev) => [...prev, ...(data.items as Scan[])]);
+      setNextCursor(data.nextCursor);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load more");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const totalScans = scans.length;
   const completedScans = scans.filter((s) => s.status === "completed");
@@ -57,6 +78,15 @@ export default function DashboardPage() {
           + New Scan
         </Link>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
+          {error}
+          <button onClick={() => setError("")} className="ml-3 text-xs underline hover:no-underline">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Stats cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -185,6 +215,17 @@ export default function DashboardPage() {
                 ))}
               </tbody>
             </table>
+            {nextCursor && (
+              <div className="flex justify-center border-t border-[var(--border)] px-4 py-3">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="rounded-lg bg-[var(--bg-card-hover)] px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] transition-all hover:brightness-110 disabled:opacity-50"
+                >
+                  {loadingMore ? "Loading..." : "Load More"}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

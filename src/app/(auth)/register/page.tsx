@@ -12,11 +12,40 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+
+  function getPasswordStrength(pw: string): { level: "weak" | "medium" | "strong"; score: number } {
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[a-z]/.test(pw)) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^a-zA-Z0-9]/.test(pw)) score++;
+    if (score <= 2) return { level: "weak", score: 0 };
+    if (score <= 4) return { level: "medium", score: 1 };
+    return { level: "strong", score: 2 };
+  }
+
+  function validatePassword(pw: string): string {
+    if (pw.length < 8) return "Minimum 8 characters";
+    if (!/[a-z]/.test(pw)) return "Must include a lowercase letter";
+    if (!/[A-Z]/.test(pw)) return "Must include an uppercase letter";
+    if (!/[0-9]/.test(pw)) return "Must include a number";
+    return "";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
+
+    const pwErr = validatePassword(password);
+    if (pwErr) {
+      setPasswordError(pwErr);
+      setLoading(false);
+      return;
+    }
 
     const supabase = createClient();
     const { error: authError } = await supabase.auth.signUp({
@@ -115,12 +144,56 @@ export default function RegisterPage() {
           <input
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setPasswordError("");
+            }}
             required
-            minLength={8}
             className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent-dim)]"
             placeholder="Minimum 8 characters"
           />
+          {password && (
+            <div className="mt-2">
+              <div className="flex gap-1">
+                {["weak", "medium", "strong"].map((level) => {
+                  const strength = getPasswordStrength(password);
+                  const active = strength.level === level ||
+                    (level === "weak" && strength.level === "medium") ||
+                    (level === "weak" && strength.level === "strong") ||
+                    (level === "medium" && strength.level === "strong");
+                  const filled = level === "weak" ? strength.score >= 0 : level === "medium" ? strength.score >= 1 : strength.score >= 2;
+                  const color =
+                    strength.level === "weak"
+                      ? "bg-[var(--critical)]"
+                      : strength.level === "medium"
+                      ? "bg-[#f59e0b]"
+                      : "bg-[var(--accent)]";
+                  return (
+                    <div
+                      key={level}
+                      className={`h-1 flex-1 rounded-full transition-colors ${filled ? color : "bg-[var(--border)]"}`}
+                    />
+                  );
+                })}
+              </div>
+              <p
+                className={`mt-1 text-xs ${
+                  getPasswordStrength(password).level === "weak"
+                    ? "text-[var(--critical)]"
+                    : getPasswordStrength(password).level === "medium"
+                    ? "text-[#f59e0b]"
+                    : "text-[var(--accent)]"
+                }`}
+              >
+                {getPasswordStrength(password).level === "weak" && "Weak — add uppercase, number, or special char"}
+                {getPasswordStrength(password).level === "medium" && "Medium — getting better"}
+                {getPasswordStrength(password).level === "strong" && "Strong password"}
+              </p>
+            </div>
+          )}
+          {passwordError && (
+            <p className="mt-1 text-xs text-[var(--critical)]">{passwordError}</p>
+          )}
         </div>
 
         <button

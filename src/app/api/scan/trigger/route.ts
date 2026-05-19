@@ -1,6 +1,7 @@
 import { after } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runScanInline } from "@/lib/scan-runner";
+import { logger } from "@/lib/logger";
 
 export const maxDuration = 60;
 
@@ -40,13 +41,13 @@ export async function POST(req: Request) {
           scanLevel: scan.scanLevel,
         });
       } catch (err) {
-        console.error(`[Trigger] Scan ${scanId} failed:`, err);
+        logger.error("Trigger", `Scan ${scanId} failed: ${err}`);
       }
     });
 
     return Response.json({ success: true, scanId });
   } catch (err) {
-    console.error("[Trigger] Invalid request:", err);
+    logger.error("Trigger", `Invalid request: ${err}`);
     return Response.json({ error: "Invalid request" }, { status: 400 });
   }
 }

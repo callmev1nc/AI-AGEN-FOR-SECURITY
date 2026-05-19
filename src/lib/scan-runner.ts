@@ -1,19 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
-import type { VulnerabilityResult, Severity } from "../../worker/src/scanners/types";
+import type { VulnerabilityResult, Severity } from "@/lib/scanners/types";
+import { logger } from "@/lib/logger";
 
-import { scan as scanHeaders } from "../../worker/src/scanners/headers";
-import { scan as scanSsl } from "../../worker/src/scanners/ssl";
-import { scan as scanCookies } from "../../worker/src/scanners/cookies";
-import { scan as scanInfoDisclosure } from "../../worker/src/scanners/info-disclosure";
-import { scan as scanMixedContent } from "../../worker/src/scanners/mixed-content";
-import { scan as scanCors } from "../../worker/src/scanners/cors";
-import { scan as scanXss } from "../../worker/src/scanners/xss";
-import { scan as scanPorts } from "../../worker/src/scanners/ports";
-import { scan as scanXssAdvanced } from "../../worker/src/scanners/xss-advanced";
-import { scan as scanCorsAdvanced } from "../../worker/src/scanners/cors-advanced";
-import { scan as scanCookieAnalysis } from "../../worker/src/scanners/cookie-analysis";
-import { scan as scanErrorFuzzing } from "../../worker/src/scanners/error-fuzzing";
-import { scan as scanHeaderFuzzing } from "../../worker/src/scanners/header-fuzzing";
+import { scan as scanHeaders } from "@/lib/scanners/headers";
+import { scan as scanSsl } from "@/lib/scanners/ssl";
+import { scan as scanCookies } from "@/lib/scanners/cookies";
+import { scan as scanInfoDisclosure } from "@/lib/scanners/info-disclosure";
+import { scan as scanMixedContent } from "@/lib/scanners/mixed-content";
+import { scan as scanCors } from "@/lib/scanners/cors";
+import { scan as scanXss } from "@/lib/scanners/xss";
+import { scan as scanPorts } from "@/lib/scanners/ports";
+import { scan as scanXssAdvanced } from "@/lib/scanners/xss-advanced";
+import { scan as scanCorsAdvanced } from "@/lib/scanners/cors-advanced";
+import { scan as scanCookieAnalysis } from "@/lib/scanners/cookie-analysis";
+import { scan as scanErrorFuzzing } from "@/lib/scanners/error-fuzzing";
+import { scan as scanHeaderFuzzing } from "@/lib/scanners/header-fuzzing";
 
 interface ScannerEntry {
   name: string;
@@ -45,7 +46,7 @@ const SEVERITY_DEDUCTIONS: Record<Severity, number> = {
   info: 0,
 };
 
-function calculateScore(findings: VulnerabilityResult[]): number {
+export function calculateScore(findings: VulnerabilityResult[]): number {
   let score = 100;
   for (const finding of findings) {
     score -= SEVERITY_DEDUCTIONS[finding.severity];
@@ -53,7 +54,7 @@ function calculateScore(findings: VulnerabilityResult[]): number {
   return Math.max(0, Math.min(100, score));
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
@@ -68,7 +69,7 @@ export async function runScanInline(params: {
 }): Promise<void> {
   const { scanId, targetUrl, scanLevel } = params;
 
-  console.log(`[ScanRunner] Starting scan ${scanId} for ${targetUrl} (level: ${scanLevel})`);
+  logger.info("ScanRunner", `Starting scan ${scanId} for ${targetUrl} (level: ${scanLevel})`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -118,23 +119,23 @@ export async function runScanInline(params: {
     }
     const { error } = await supabase.from("scans").update(update).eq("id", scanId);
     if (error) {
-      console.error(`[ScanRunner] Failed to update progress: ${error.message}`);
+      logger.error("ScanRunner", `Failed to update progress: ${error.message}`);
     }
   }
 
   const results = await Promise.allSettled(
     activeModules.map(async (module) => {
       try {
-        console.log(`[ScanRunner] Running scanner: ${module.name}`);
+        logger.info("ScanRunner", `Running scanner: ${module.name}`);
         const moduleStart = Date.now();
         const findings = await module.scan(targetUrl);
         const elapsed = Date.now() - moduleStart;
-        console.log(`[ScanRunner] ${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
+        logger.info("ScanRunner", `${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
         await updateProgress(module.name);
         return findings;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`[ScanRunner] Scanner "${module.name}" failed: ${message}`);
+        logger.error("ScanRunner", `Scanner "${module.name}" failed: ${message}`);
         await updateProgress(module.name, message);
         return [] as VulnerabilityResult[];
       }
@@ -150,9 +151,7 @@ export async function runScanInline(params: {
 
   const overallScore = calculateScore(allFindings);
   const totalElapsed = Date.now() - startedAt;
-  console.log(
-    `[ScanRunner] Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`
-  );
+  logger.info("ScanRunner", `Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`);
 
   if (allFindings.length > 0) {
     const vulnerabilityRecords = allFindings.map((f) => ({
@@ -175,10 +174,7 @@ export async function runScanInline(params: {
         .insert(batch);
 
       if (insertError) {
-        console.error(
-          `[ScanRunner] Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}:`,
-          insertError.message
-        );
+        logger.error("ScanRunner", `Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}: ${insertError.message}`);
       }
     }
   }
@@ -195,9 +191,9 @@ export async function runScanInline(params: {
     .eq("id", scanId);
 
   if (updateError) {
-    console.error(`[ScanRunner] Failed to update scan ${scanId}:`, updateError.message);
+    logger.error("ScanRunner", `Failed to update scan ${scanId}: ${updateError.message}`);
     throw updateError;
   }
 
-  console.log(`[ScanRunner] Scan ${scanId} saved successfully. Score: ${overallScore}`);
+  logger.info("ScanRunner", `Scan ${scanId} saved successfully. Score: ${overallScore}`);
 }

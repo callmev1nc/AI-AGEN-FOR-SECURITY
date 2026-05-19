@@ -9,38 +9,38 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  name            String
-  plan            Plan     @default(free)
-  stripeCustomerId String? @unique
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  scans           Scan[]
-  reports         Report[]
+  id               String   @id @default(uuid()) @db.Uuid
+  email            String   @unique
+  name             String
+  plan             Plan     @default(free)
+  stripeCustomerId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  scans            Scan[]
+  reports          Report[]
 
   @@map("users")
 }
 
 model Scan {
-  id              String      @id @default(uuid())
-  userId          String
-  targetUrl       String
-  status          ScanStatus  @default(queued)
-  scanType        ScanType    @default(website)
-  scanLevel       ScanLevel   @default(standard)
-  overallScore    Int?
-  progressPercent Int?
-  currentModule   String?
+  id               String      @id @default(uuid()) @db.Uuid
+  userId           String      @db.Uuid
+  targetUrl        String
+  status           ScanStatus  @default(queued)
+  scanType         ScanType    @default(website)
+  scanLevel        ScanLevel   @default(standard)
+  overallScore     Int?
+  progressPercent  Int?
+  currentModule    String?
   modulesCompleted Int?
-  totalModules    Int?
-  errorMessage    String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime    @default(now())
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  vulnerabilities Vulnerability[]
-  reports         Report[]
+  totalModules     Int?
+  errorMessage     String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vulnerabilities  Vulnerability[]
+  reports          Report[]
 
   @@index([userId])
   @@index([status])
@@ -48,8 +48,8 @@ model Scan {
 }
 
 model Vulnerability {
-  id          String     @id @default(uuid())
-  scanId      String
+  id          String     @id @default(uuid()) @db.Uuid
+  scanId      String     @db.Uuid
   severity    Severity
   category    String
   title       String
@@ -67,9 +67,9 @@ model Vulnerability {
 }
 
 model Report {
-  id          String       @id @default(uuid())
-  scanId      String
-  userId      String
+  id          String       @id @default(uuid()) @db.Uuid
+  scanId      String       @db.Uuid
+  userId      String       @db.Uuid
   format      ReportFormat
   storagePath String
   createdAt   DateTime     @default(now())
