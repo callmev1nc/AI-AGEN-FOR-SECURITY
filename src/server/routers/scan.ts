@@ -36,21 +36,6 @@ export const scanRouter = createTRPCRouter({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
       }
 
-      // Try BullMQ queue, fall back to marking as running
-      try {
-        const { scanQueue } = await import("@/lib/queue");
-        await scanQueue.add("scan", {
-          scanId: scan.id,
-          targetUrl: input.targetUrl,
-          scanLevel: input.scanLevel,
-        });
-      } catch {
-        await ctx.admin
-          .from("scans")
-          .update({ status: "running", startedAt: new Date().toISOString() })
-          .eq("id", scan.id);
-      }
-
       return scan;
     }),
 
@@ -87,7 +72,6 @@ export const scanRouter = createTRPCRouter({
   getVulnerabilities: protectedProcedure
     .input(z.object({ scanId: z.string() }))
     .query(async ({ ctx, input }) => {
-      // Verify the scan belongs to the user
       const { data: scan } = await ctx.admin
         .from("scans")
         .select("id")

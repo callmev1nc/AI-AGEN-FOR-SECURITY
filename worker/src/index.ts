@@ -46,11 +46,7 @@ const scanWorker = new Worker<ScanJobData>(
   },
   {
     connection,
-    concurrency: 1, // Process one scan at a time to avoid overwhelming targets
-    limiter: {
-      max: 1,
-      duration: 5000, // Minimum 5 seconds between jobs
-    },
+    concurrency: 3,
   }
 );
 

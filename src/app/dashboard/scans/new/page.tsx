@@ -9,7 +9,7 @@ const scanLevels = [
   {
     id: "quick" as const,
     name: "Quick",
-    time: "~30 seconds",
+    time: "~15 seconds",
     modules: 5,
     color: "var(--accent)",
     colorClass: "border-[var(--accent)]",
@@ -26,7 +26,7 @@ const scanLevels = [
   {
     id: "standard" as const,
     name: "Standard",
-    time: "~2 minutes",
+    time: "~30 seconds",
     modules: 7,
     color: "var(--medium)",
     colorClass: "border-[var(--medium)]",
@@ -42,7 +42,7 @@ const scanLevels = [
   {
     id: "deep" as const,
     name: "Deep",
-    time: "~5-10 minutes",
+    time: "~1-3 minutes",
     modules: 13,
     color: "var(--critical)",
     colorClass: "border-[var(--critical)]",

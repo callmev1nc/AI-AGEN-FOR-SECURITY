@@ -1,7 +1,5 @@
 import { Queue } from "bullmq";
 
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
-
 function parseRedisUrl(url: string) {
   const parsed = new URL(url);
   return {
@@ -11,9 +9,16 @@ function parseRedisUrl(url: string) {
   };
 }
 
-const connection = parseRedisUrl(REDIS_URL);
+let queue: Queue | null = null;
 
-export const scanQueue = new Queue("scan-queue", { connection });
+export function getScanQueue(): Queue | null {
+  const url = process.env.REDIS_URL;
+  if (!url) return null;
+  if (!queue) {
+    queue = new Queue("scan-queue", { connection: parseRedisUrl(url) });
+  }
+  return queue;
+}
 
 export interface ScanJobData {
   scanId: string;

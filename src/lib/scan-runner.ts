@@ -1,25 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
-import type { ScanJobData } from "../../src/lib/queue";
-import type { VulnerabilityResult, Severity } from "./scanners/types";
+import type { VulnerabilityResult, Severity } from "../../worker/src/scanners/types";
 
-// Scanner module imports
-import { scan as scanHeaders } from "./scanners/headers";
-import { scan as scanSsl } from "./scanners/ssl";
-import { scan as scanCookies } from "./scanners/cookies";
-import { scan as scanInfoDisclosure } from "./scanners/info-disclosure";
-import { scan as scanMixedContent } from "./scanners/mixed-content";
-import { scan as scanCors } from "./scanners/cors";
-import { scan as scanXss } from "./scanners/xss";
-import { scan as scanPorts } from "./scanners/ports";
-import { scan as scanXssAdvanced } from "./scanners/xss-advanced";
-import { scan as scanCorsAdvanced } from "./scanners/cors-advanced";
-import { scan as scanCookieAnalysis } from "./scanners/cookie-analysis";
-import { scan as scanErrorFuzzing } from "./scanners/error-fuzzing";
-import { scan as scanHeaderFuzzing } from "./scanners/header-fuzzing";
-
-// ---------------------------------------------------------------------------
-// Scanner module registry
-// ---------------------------------------------------------------------------
+import { scan as scanHeaders } from "../../worker/src/scanners/headers";
+import { scan as scanSsl } from "../../worker/src/scanners/ssl";
+import { scan as scanCookies } from "../../worker/src/scanners/cookies";
+import { scan as scanInfoDisclosure } from "../../worker/src/scanners/info-disclosure";
+import { scan as scanMixedContent } from "../../worker/src/scanners/mixed-content";
+import { scan as scanCors } from "../../worker/src/scanners/cors";
+import { scan as scanXss } from "../../worker/src/scanners/xss";
+import { scan as scanPorts } from "../../worker/src/scanners/ports";
+import { scan as scanXssAdvanced } from "../../worker/src/scanners/xss-advanced";
+import { scan as scanCorsAdvanced } from "../../worker/src/scanners/cors-advanced";
+import { scan as scanCookieAnalysis } from "../../worker/src/scanners/cookie-analysis";
+import { scan as scanErrorFuzzing } from "../../worker/src/scanners/error-fuzzing";
+import { scan as scanHeaderFuzzing } from "../../worker/src/scanners/header-fuzzing";
 
 interface ScannerEntry {
   name: string;
@@ -28,18 +22,13 @@ interface ScannerEntry {
 }
 
 const SCANNER_MODULES: ScannerEntry[] = [
-  // Quick level (5 modules)
   { name: "Security Headers", scan: scanHeaders, level: "quick" },
   { name: "SSL/TLS", scan: scanSsl, level: "quick" },
   { name: "Cookies", scan: scanCookies, level: "quick" },
   { name: "Information Disclosure", scan: scanInfoDisclosure, level: "quick" },
   { name: "Mixed Content", scan: scanMixedContent, level: "quick" },
-
-  // Standard level (+2 modules)
   { name: "CORS", scan: scanCors, level: "standard" },
   { name: "XSS", scan: scanXss, level: "standard" },
-
-  // Deep level (+6 modules)
   { name: "Port Scan", scan: scanPorts, level: "deep" },
   { name: "XSS Advanced", scan: scanXssAdvanced, level: "deep" },
   { name: "CORS Advanced", scan: scanCorsAdvanced, level: "deep" },
@@ -47,10 +36,6 @@ const SCANNER_MODULES: ScannerEntry[] = [
   { name: "Error Fuzzing", scan: scanErrorFuzzing, level: "deep" },
   { name: "Header Fuzzing", scan: scanHeaderFuzzing, level: "deep" },
 ];
-
-// ---------------------------------------------------------------------------
-// Score calculation
-// ---------------------------------------------------------------------------
 
 const SEVERITY_DEDUCTIONS: Record<Severity, number> = {
   critical: 25,
@@ -60,7 +45,7 @@ const SEVERITY_DEDUCTIONS: Record<Severity, number> = {
   info: 0,
 };
 
-export function calculateScore(findings: VulnerabilityResult[]): number {
+function calculateScore(findings: VulnerabilityResult[]): number {
   let score = 100;
   for (const finding of findings) {
     score -= SEVERITY_DEDUCTIONS[finding.severity];
@@ -68,33 +53,7 @@ export function calculateScore(findings: VulnerabilityResult[]): number {
   return Math.max(0, Math.min(100, score));
 }
 
-// ---------------------------------------------------------------------------
-// Supabase client
-// ---------------------------------------------------------------------------
-
-function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables"
-    );
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-export function formatDuration(ms: number): string {
+function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
@@ -102,32 +61,35 @@ export function formatDuration(ms: number): string {
   return `${minutes}m ${secs}s`;
 }
 
-// ---------------------------------------------------------------------------
-// Main scan engine
-// ---------------------------------------------------------------------------
+export async function runScanInline(params: {
+  scanId: string;
+  targetUrl: string;
+  scanLevel: "quick" | "standard" | "deep";
+}): Promise<void> {
+  const { scanId, targetUrl, scanLevel } = params;
 
-export async function runScan(job: { data: ScanJobData }): Promise<void> {
-  const { scanId, targetUrl, scanLevel } = job.data;
+  console.log(`[ScanRunner] Starting scan ${scanId} for ${targetUrl} (level: ${scanLevel})`);
 
-  console.log(`[Engine] Starting scan ${scanId} for ${targetUrl} (level: ${scanLevel})`);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  }
 
-  const supabase = getSupabaseClient();
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
   const startedAt = Date.now();
 
-  // Select modules based on scan level
   const activeModules = SCANNER_MODULES.filter((m) => {
     if (scanLevel === "quick") return m.level === "quick";
     if (scanLevel === "standard") return m.level === "quick" || m.level === "standard";
     return true;
   });
 
-  console.log(
-    `[Engine] Running ${activeModules.length} scanner modules in parallel: ${activeModules.map((m) => m.name).join(", ")}`
-  );
-
   const totalModules = activeModules.length;
 
-  // Mark scan as running with initial progress
   await supabase
     .from("scans")
     .update({
@@ -140,7 +102,6 @@ export async function runScan(job: { data: ScanJobData }): Promise<void> {
     })
     .eq("id", scanId);
 
-  // Track per-module progress with atomic counter
   let completedCount = 0;
 
   async function updateProgress(moduleName: string, errorMsg?: string) {
@@ -157,24 +118,23 @@ export async function runScan(job: { data: ScanJobData }): Promise<void> {
     }
     const { error } = await supabase.from("scans").update(update).eq("id", scanId);
     if (error) {
-      console.error(`[Engine] Failed to update progress: ${error.message}`);
+      console.error(`[ScanRunner] Failed to update progress: ${error.message}`);
     }
   }
 
-  // Run all modules in parallel — each is independent (HTTP-based, no shared state)
   const results = await Promise.allSettled(
     activeModules.map(async (module) => {
       try {
-        console.log(`[Engine] Running scanner: ${module.name}`);
+        console.log(`[ScanRunner] Running scanner: ${module.name}`);
         const moduleStart = Date.now();
         const findings = await module.scan(targetUrl);
         const elapsed = Date.now() - moduleStart;
-        console.log(`[Engine] ${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
+        console.log(`[ScanRunner] ${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
         await updateProgress(module.name);
         return findings;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(`[Engine] Scanner "${module.name}" failed: ${message}`);
+        console.error(`[ScanRunner] Scanner "${module.name}" failed: ${message}`);
         await updateProgress(module.name, message);
         return [] as VulnerabilityResult[];
       }
@@ -188,14 +148,12 @@ export async function runScan(job: { data: ScanJobData }): Promise<void> {
     }
   }
 
-  // Calculate overall score
   const overallScore = calculateScore(allFindings);
   const totalElapsed = Date.now() - startedAt;
   console.log(
-    `[Engine] Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`
+    `[ScanRunner] Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`
   );
 
-  // Create vulnerability records
   if (allFindings.length > 0) {
     const vulnerabilityRecords = allFindings.map((f) => ({
       scanId,
@@ -218,14 +176,13 @@ export async function runScan(job: { data: ScanJobData }): Promise<void> {
 
       if (insertError) {
         console.error(
-          `[Engine] Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}:`,
+          `[ScanRunner] Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}:`,
           insertError.message
         );
       }
     }
   }
 
-  // Update scan record with final status and score
   const { error: updateError } = await supabase
     .from("scans")
     .update({
@@ -238,9 +195,9 @@ export async function runScan(job: { data: ScanJobData }): Promise<void> {
     .eq("id", scanId);
 
   if (updateError) {
-    console.error(`[Engine] Failed to update scan ${scanId}:`, updateError.message);
+    console.error(`[ScanRunner] Failed to update scan ${scanId}:`, updateError.message);
     throw updateError;
   }
 
-  console.log(`[Engine] Scan ${scanId} saved successfully. Score: ${overallScore}`);
+  console.log(`[ScanRunner] Scan ${scanId} saved successfully. Score: ${overallScore}`);
 }

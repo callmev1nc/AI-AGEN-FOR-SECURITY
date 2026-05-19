@@ -23,19 +23,24 @@ model User {
 }
 
 model Scan {
-  id          String      @id @default(uuid())
-  userId      String
-  targetUrl   String
-  status      ScanStatus  @default(queued)
-  scanType    ScanType    @default(website)
-  scanLevel   ScanLevel   @default(standard)
-  overallScore Int?
-  startedAt   DateTime?
-  completedAt DateTime?
-  createdAt   DateTime    @default(now())
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String      @id @default(uuid())
+  userId          String
+  targetUrl       String
+  status          ScanStatus  @default(queued)
+  scanType        ScanType    @default(website)
+  scanLevel       ScanLevel   @default(standard)
+  overallScore    Int?
+  progressPercent Int?
+  currentModule   String?
+  modulesCompleted Int?
+  totalModules    Int?
+  errorMessage    String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   vulnerabilities Vulnerability[]
-  reports     Report[]
+  reports         Report[]
 
   @@index([userId])
   @@index([status])

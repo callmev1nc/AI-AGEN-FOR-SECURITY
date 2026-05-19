@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "src/app/api/scan/trigger/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
