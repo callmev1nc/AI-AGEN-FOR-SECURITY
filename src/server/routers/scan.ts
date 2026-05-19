@@ -2,8 +2,21 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { generatePdfReport } from "@/server/services/report";
 
 export const scanRouter = createTRPCRouter({
+  exportPdf: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { report } = await generatePdfReport(input.id, ctx.user.id);
+      const { data: signedUrl, error: signedUrlError } = await ctx.admin.storage
+        .from("reports")
+        .createSignedUrl(report.storagePath, 60 * 60);
+      if (signedUrlError || !signedUrl) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate download URL" });
+      }
+      return { downloadUrl: signedUrl.signedUrl, report };
+    }),
   create: protectedProcedure
     .input(
       z.object({

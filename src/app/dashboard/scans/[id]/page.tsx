@@ -146,6 +146,8 @@ export default function ScanResultsPage() {
   const [scan, setScan] = useState<Scan | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const triggerSent = useRef(false);
 
   useEffect(() => {
@@ -241,12 +243,37 @@ export default function ScanResultsPage() {
             <span className="uppercase font-medium" style={{ fontFamily: "var(--font-jetbrains)" }}>{scan.scanLevel}</span> scan
           </p>
         </div>
-        <div className="flex gap-3">
-          <button className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white">
-            Export PDF
+        <div className="flex flex-col items-end gap-2">
+          {exportError && (
+            <p className="text-xs text-[var(--critical)]">{exportError}</p>
+          )}
+          <div className="flex gap-3">
+          <button
+            onClick={async () => {
+              setExporting(true);
+              setExportError("");
+              try {
+                const { downloadUrl } = await trpcClient.scan.exportPdf.mutate({ id: scanId });
+                const a = document.createElement("a");
+                a.href = downloadUrl;
+                a.download = `security-report-${scanId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+              } catch (err) {
+                setExportError(err instanceof Error ? err.message : "Export failed");
+              } finally {
+                setExporting(false);
+              }
+            }}
+            disabled={exporting}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
+          >
+            {exporting ? "Exporting..." : "Export PDF"}
           </button>
           <Link href="/dashboard/scans/new" className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-all hover:brightness-110">New Scan</Link>
         </div>
+      </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">

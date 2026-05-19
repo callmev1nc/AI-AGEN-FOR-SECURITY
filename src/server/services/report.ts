@@ -38,6 +38,17 @@ export async function generatePdfReport(scanId: string, userId: string) {
 
   const storagePath = `reports/${userId}/${scanId}-${Date.now()}.pdf`;
 
+  const { error: uploadError } = await admin.storage
+    .from("reports")
+    .upload(storagePath, buffer, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    throw new Error(`Failed to upload PDF to storage: ${uploadError.message}`);
+  }
+
   const { data: report, error: reportError } = await admin
     .from("reports")
     .insert({
