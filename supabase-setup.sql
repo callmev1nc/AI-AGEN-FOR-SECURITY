@@ -1,16 +1,46 @@
 -- Security Audit Platform - Database Setup
 -- Run this in Supabase SQL Editor (Dashboard > SQL Editor)
+-- Safe to re-run — uses IF NOT EXISTS throughout
 
--- Enums
-CREATE TYPE "Plan" AS ENUM ('free', 'pro', 'enterprise');
-CREATE TYPE "ScanStatus" AS ENUM ('queued', 'running', 'completed', 'failed');
-CREATE TYPE "ScanType" AS ENUM ('website', 'api', 'infrastructure');
-CREATE TYPE "ScanLevel" AS ENUM ('quick', 'standard', 'deep');
-CREATE TYPE "Severity" AS ENUM ('critical', 'high', 'medium', 'low', 'info');
-CREATE TYPE "ReportFormat" AS ENUM ('pdf', 'json', 'html');
+-- Enums (idempotent via DO blocks)
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Plan') THEN
+    CREATE TYPE "Plan" AS ENUM ('free', 'pro', 'enterprise');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ScanStatus') THEN
+    CREATE TYPE "ScanStatus" AS ENUM ('queued', 'running', 'completed', 'failed');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ScanType') THEN
+    CREATE TYPE "ScanType" AS ENUM ('website', 'api', 'infrastructure');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ScanLevel') THEN
+    CREATE TYPE "ScanLevel" AS ENUM ('quick', 'standard', 'deep');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'Severity') THEN
+    CREATE TYPE "Severity" AS ENUM ('critical', 'high', 'medium', 'low', 'info');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReportFormat') THEN
+    CREATE TYPE "ReportFormat" AS ENUM ('pdf', 'json', 'html');
+  END IF;
+END $$;
 
 -- Users table
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
   "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   "email" TEXT NOT NULL UNIQUE,
   "name" TEXT NOT NULL,
@@ -21,7 +51,7 @@ CREATE TABLE "users" (
 );
 
 -- Scans table
-CREATE TABLE "scans" (
+CREATE TABLE IF NOT EXISTS "scans" (
   "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   "userId" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
   "targetUrl" TEXT NOT NULL,
@@ -29,15 +59,20 @@ CREATE TABLE "scans" (
   "scanType" "ScanType" NOT NULL DEFAULT 'website',
   "scanLevel" "ScanLevel" NOT NULL DEFAULT 'standard',
   "overallScore" INTEGER,
+  "progressPercent" INTEGER,
+  "currentModule" TEXT,
+  "modulesCompleted" INTEGER,
+  "totalModules" INTEGER,
+  "errorMessage" TEXT,
   "startedAt" TIMESTAMP(3),
   "completedAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX "scans_userId_idx" ON "scans"("userId");
-CREATE INDEX "scans_status_idx" ON "scans"("status");
+CREATE INDEX IF NOT EXISTS "scans_userId_idx" ON "scans"("userId");
+CREATE INDEX IF NOT EXISTS "scans_status_idx" ON "scans"("status");
 
 -- Vulnerabilities table
-CREATE TABLE "vulnerabilities" (
+CREATE TABLE IF NOT EXISTS "vulnerabilities" (
   "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   "scanId" UUID NOT NULL REFERENCES "scans"("id") ON DELETE CASCADE,
   "severity" "Severity" NOT NULL,
@@ -50,11 +85,11 @@ CREATE TABLE "vulnerabilities" (
   "affectedUrl" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX "vulnerabilities_scanId_idx" ON "vulnerabilities"("scanId");
-CREATE INDEX "vulnerabilities_severity_idx" ON "vulnerabilities"("severity");
+CREATE INDEX IF NOT EXISTS "vulnerabilities_scanId_idx" ON "vulnerabilities"("scanId");
+CREATE INDEX IF NOT EXISTS "vulnerabilities_severity_idx" ON "vulnerabilities"("severity");
 
 -- Reports table
-CREATE TABLE "reports" (
+CREATE TABLE IF NOT EXISTS "reports" (
   "id" UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   "scanId" UUID NOT NULL REFERENCES "scans"("id") ON DELETE CASCADE,
   "userId" UUID NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
@@ -62,8 +97,8 @@ CREATE TABLE "reports" (
   "storagePath" TEXT NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX "reports_userId_idx" ON "reports"("userId");
-CREATE INDEX "reports_scanId_idx" ON "reports"("scanId");
+CREATE INDEX IF NOT EXISTS "reports_userId_idx" ON "reports"("userId");
+CREATE INDEX IF NOT EXISTS "reports_scanId_idx" ON "reports"("scanId");
 
 -- Enable Row Level Security
 ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
@@ -71,19 +106,31 @@ ALTER TABLE "scans" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "vulnerabilities" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "reports" ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies (users can only access their own data)
+-- RLS Policies (safe re-run via DROP + CREATE)
+DROP POLICY IF EXISTS "Users can view own profile" ON "users";
 CREATE POLICY "Users can view own profile" ON "users" FOR SELECT USING (auth.uid() = "id"::uuid);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON "users";
 CREATE POLICY "Users can update own profile" ON "users" FOR UPDATE USING (auth.uid() = "id"::uuid);
 
+DROP POLICY IF EXISTS "Users can view own scans" ON "scans";
 CREATE POLICY "Users can view own scans" ON "scans" FOR SELECT USING (auth.uid() = "userId"::uuid);
+
+DROP POLICY IF EXISTS "Users can create own scans" ON "scans";
 CREATE POLICY "Users can create own scans" ON "scans" FOR INSERT WITH CHECK (auth.uid() = "userId"::uuid);
+
+DROP POLICY IF EXISTS "Users can update own scans" ON "scans";
 CREATE POLICY "Users can update own scans" ON "scans" FOR UPDATE USING (auth.uid() = "userId"::uuid);
 
+DROP POLICY IF EXISTS "Users can view own vulnerabilities" ON "vulnerabilities";
 CREATE POLICY "Users can view own vulnerabilities" ON "vulnerabilities" FOR SELECT USING (
   EXISTS (SELECT 1 FROM "scans" WHERE "scans"."id" = "vulnerabilities"."scanId" AND "scans"."userId" = auth.uid())
 );
 
+DROP POLICY IF EXISTS "Users can view own reports" ON "reports";
 CREATE POLICY "Users can view own reports" ON "reports" FOR SELECT USING (auth.uid() = "userId"::uuid);
+
+DROP POLICY IF EXISTS "Users can create own reports" ON "reports";
 CREATE POLICY "Users can create own reports" ON "reports" FOR INSERT WITH CHECK (auth.uid() = "userId"::uuid);
 
 -- Storage: Create reports bucket for PDF exports
@@ -91,10 +138,12 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('reports', 'reports', false)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Users can view own report files" ON storage.objects;
 CREATE POLICY "Users can view own report files"
 ON storage.objects FOR SELECT
 USING (auth.uid()::text = (storage.foldername(name))[1]);
 
+DROP POLICY IF EXISTS "Users can upload own report files" ON storage.objects;
 CREATE POLICY "Users can upload own report files"
 ON storage.objects FOR INSERT
 WITH CHECK (
@@ -111,6 +160,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS users_updated_at ON "users";
 CREATE TRIGGER users_updated_at
   BEFORE UPDATE ON "users"
   FOR EACH ROW
