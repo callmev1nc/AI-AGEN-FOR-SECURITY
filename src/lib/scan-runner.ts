@@ -15,6 +15,16 @@ import { scan as scanCorsAdvanced } from "@/lib/scanners/cors-advanced";
 import { scan as scanCookieAnalysis } from "@/lib/scanners/cookie-analysis";
 import { scan as scanErrorFuzzing } from "@/lib/scanners/error-fuzzing";
 import { scan as scanHeaderFuzzing } from "@/lib/scanners/header-fuzzing";
+import { scan as scanPromptInjectionBasic } from "@/lib/scanners/prompt-injection-basic";
+import { scan as scanPromptInjectionAdvanced } from "@/lib/scanners/prompt-injection-advanced";
+import { scan as scanPromptInjectionContext } from "@/lib/scanners/prompt-injection-context";
+import { scan as scanApiSqlInjection } from "@/lib/scanners/api-sql-injection";
+import { scan as scanApiPathTraversal } from "@/lib/scanners/api-path-traversal";
+import { scan as scanApiAuthBypass } from "@/lib/scanners/api-auth-bypass";
+import { scan as scanInfraDependencies } from "@/lib/scanners/infra-dependencies";
+import { scan as scanInfraSecrets } from "@/lib/scanners/infra-secrets";
+import { scan as scanInfraCodePatterns } from "@/lib/scanners/infra-code-patterns";
+import { scan as scanInfraCodeAudit } from "@/lib/scanners/infra-code-audit";
 
 const SCANNER_MODULES: ScannerEntry[] = [
   { name: "Security Headers", scan: scanHeaders, level: "quick", scanType: "website" },
@@ -30,6 +40,16 @@ const SCANNER_MODULES: ScannerEntry[] = [
   { name: "Cookie Analysis", scan: scanCookieAnalysis, level: "deep", scanType: "website" },
   { name: "Error Fuzzing", scan: scanErrorFuzzing, level: "deep", scanType: "website" },
   { name: "Header Fuzzing", scan: scanHeaderFuzzing, level: "deep", scanType: "website" },
+  { name: "Prompt Injection (Basic)", scan: scanPromptInjectionBasic, level: "quick", scanType: "api" },
+  { name: "Prompt Injection (Advanced)", scan: scanPromptInjectionAdvanced, level: "standard", scanType: "api" },
+  { name: "Prompt Injection (Context)", scan: scanPromptInjectionContext, level: "deep", scanType: "api" },
+  { name: "SQL Injection (API)", scan: scanApiSqlInjection, level: "standard", scanType: "api" },
+  { name: "Path Traversal (API)", scan: scanApiPathTraversal, level: "standard", scanType: "api" },
+  { name: "Auth Bypass (API)", scan: scanApiAuthBypass, level: "deep", scanType: "api" },
+  { name: "Dependency Scan", scan: scanInfraDependencies, level: "quick", scanType: "infrastructure" },
+  { name: "Secrets Detection", scan: scanInfraSecrets, level: "quick", scanType: "infrastructure" },
+  { name: "Code Patterns", scan: scanInfraCodePatterns, level: "standard", scanType: "infrastructure" },
+  { name: "AI Code Audit", scan: scanInfraCodeAudit, level: "deep", scanType: "infrastructure" },
 ];
 
 const SEVERITY_DEDUCTIONS: Record<Severity, number> = {

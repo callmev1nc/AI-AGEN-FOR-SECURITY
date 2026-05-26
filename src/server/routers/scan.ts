@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { generatePdfReport } from "@/server/services/report";
+import { generateAiReport } from "@/server/services/ai-report-writer";
 
 export const scanRouter = createTRPCRouter({
   listReports: protectedProcedure.query(async ({ ctx }) => {
@@ -58,6 +59,12 @@ export const scanRouter = createTRPCRouter({
       }
       return { downloadUrl: signedUrl.signedUrl, report };
     }),
+  generateAiReport: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const result = await generateAiReport(input.id, ctx.user.id);
+      return result;
+    }),
   create: protectedProcedure
     .input(
       z.object({
@@ -78,18 +85,19 @@ export const scanRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (input.scanType !== "website") {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `${input.scanType} scans are coming soon. Only website scans are currently available.`,
-        });
-      }
+      const { data: userProfile } = await ctx.admin
+        .from("users")
+        .select("plan")
+        .eq("id", ctx.user.id)
+        .single();
 
-      const rateLimit = await checkRateLimit(`scan:${ctx.user.id}`);
+      const userPlan = (userProfile?.plan as string) || "free";
+
+      const rateLimit = await checkRateLimit(`scan:${ctx.user.id}`, userPlan);
       if (!rateLimit.success) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
-          message: `Rate limit exceeded. You can start ${rateLimit.limit} scans per hour. Try again later.`,
+          message: `Rate limit exceeded. Your ${userPlan} plan allows ${rateLimit.limit} scans per hour. Upgrade at /pricing.`,
         });
       }
 

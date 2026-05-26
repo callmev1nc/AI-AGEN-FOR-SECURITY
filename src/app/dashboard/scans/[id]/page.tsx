@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { trpcClient } from "@/lib/trpc-client";
+import ChatPanel from "./chat-panel";
 
 type Vulnerability = {
   id: string;
@@ -148,6 +149,9 @@ export default function ScanResultsPage() {
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [aiReportLoading, setAiReportLoading] = useState(false);
+  const [aiReportError, setAiReportError] = useState("");
   const triggerSent = useRef(false);
 
   useEffect(() => {
@@ -271,6 +275,24 @@ export default function ScanResultsPage() {
           >
             {exporting ? "Exporting..." : "Export PDF"}
           </button>
+          <button
+            onClick={async () => {
+              setAiReportLoading(true);
+              setAiReportError("");
+              try {
+                const result = await trpcClient.scan.generateAiReport.mutate({ id: scanId });
+                setAiReport(result.content);
+              } catch (err) {
+                setAiReportError(err instanceof Error ? err.message : "Failed to generate AI report");
+              } finally {
+                setAiReportLoading(false);
+              }
+            }}
+            disabled={aiReportLoading}
+            className="rounded-lg border border-[var(--accent-dim)] px-4 py-2 text-sm text-[var(--accent)] transition-colors hover:bg-[var(--accent-dim)] disabled:opacity-50"
+          >
+            {aiReportLoading ? "Generating..." : "Generate AI Report"}
+          </button>
           <Link href="/dashboard/scans/new" className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-all hover:brightness-110">New Scan</Link>
         </div>
       </div>
@@ -382,6 +404,47 @@ export default function ScanResultsPage() {
           </div>
         </div>
       )}
+
+      {(aiReport || aiReportError) && (
+        <div className="card-base overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
+              AI-Generated Pentest Report
+            </h2>
+            {aiReport && (
+              <button
+                onClick={() => setAiReport(null)}
+                className="text-xs text-[var(--text-muted)] hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            )}
+          </div>
+          <div className="p-4">
+            {aiReportError && (
+              <p className="text-sm text-[var(--critical)]">{aiReportError}</p>
+            )}
+            {aiReport && (
+              <div className="prose prose-invert prose-sm max-w-none">
+                {aiReport.split("\n").map((line, i) => {
+                  if (line.startsWith("# ")) return <h1 key={i} className="text-lg font-bold mt-4 mb-2">{line.slice(2)}</h1>;
+                  if (line.startsWith("## ")) return <h2 key={i} className="text-base font-bold mt-3 mb-1">{line.slice(3)}</h2>;
+                  if (line.startsWith("### ")) return <h3 key={i} className="text-sm font-bold mt-2 mb-1">{line.slice(4)}</h3>;
+                  if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold text-[var(--text-secondary)] mt-2">{line.slice(2, -2)}</p>;
+                  if (line.trim() === "") return <div key={i} className="h-2" />;
+                  if (line.startsWith("- ")) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-disc">{line.slice(2)}</li>;
+                  if (line.startsWith("1. ") || line.startsWith("2. ") || line.startsWith("3. ") || line.startsWith("4. ") || line.startsWith("5. ") || line.startsWith("6. ")) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-decimal">{line.slice(3)}</li>;
+                  return <p key={i} className="text-sm text-[var(--text-secondary)]">{line}</p>;
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="card-base overflow-hidden">
+        <ChatPanel scanId={scanId} />
+      </div>
     </div>
   );
 }

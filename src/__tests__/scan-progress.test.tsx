@@ -14,6 +14,20 @@ vi.mock("@/lib/trpc-client", () => ({
       byId: {
         query: vi.fn(),
       },
+      exportPdf: {
+        mutate: vi.fn(),
+      },
+      generateAiReport: {
+        mutate: vi.fn(),
+      },
+    },
+    chat: {
+      getHistory: {
+        query: vi.fn().mockResolvedValue([]),
+      },
+      sendMessage: {
+        mutate: vi.fn(),
+      },
     },
   },
 }));
