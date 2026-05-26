@@ -74,9 +74,17 @@ export const scanRouter = createTRPCRouter({
           }
         }, "Scanning private/local addresses is not allowed"),
         scanLevel: z.enum(["quick", "standard", "deep"]).default("standard"),
+        scanType: z.enum(["website", "api", "infrastructure"]).default("website"),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.scanType !== "website") {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `${input.scanType} scans are coming soon. Only website scans are currently available.`,
+        });
+      }
+
       const rateLimit = await checkRateLimit(`scan:${ctx.user.id}`);
       if (!rateLimit.success) {
         throw new TRPCError({
@@ -91,7 +99,7 @@ export const scanRouter = createTRPCRouter({
           userId: ctx.user.id,
           targetUrl: input.targetUrl,
           scanLevel: input.scanLevel,
-          scanType: "website",
+          scanType: input.scanType,
           status: "queued",
         })
         .select()

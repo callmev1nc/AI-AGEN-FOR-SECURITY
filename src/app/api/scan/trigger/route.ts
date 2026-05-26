@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     const { data: scan, error } = await supabase
       .from("scans")
-      .select("id, targetUrl, scanLevel")
+      .select("id, targetUrl, scanLevel, scanType")
       .eq("id", scanId)
       .single();
 
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
           scanId: scan.id,
           targetUrl: scan.targetUrl,
           scanLevel: scan.scanLevel,
+          scanType: scan.scanType,
         });
       } catch (err) {
         logger.error("Trigger", `Scan ${scanId} failed: ${err}`);

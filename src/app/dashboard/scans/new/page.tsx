@@ -5,67 +5,204 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpcClient } from "@/lib/trpc-client";
 
-const scanLevels = [
+const scanTypes = [
   {
-    id: "quick" as const,
-    name: "Quick",
-    time: "~15 seconds",
-    modules: 5,
-    color: "var(--accent)",
-    colorClass: "border-[var(--accent)]",
-    dotClass: "bg-[var(--accent)]",
-    desc: "Passive security checks. Zero risk to production.",
-    checks: [
-      "Security Headers",
-      "SSL/TLS Certificate",
-      "Cookie Security",
-      "Information Disclosure",
-      "Mixed Content",
-    ],
+    id: "website" as const,
+    name: "Website",
+    desc: "Scan a web application for security misconfigurations, XSS, SSL issues, and more.",
+    icon: "🌐",
   },
   {
-    id: "standard" as const,
-    name: "Standard",
-    time: "~30 seconds",
-    modules: 7,
-    color: "var(--medium)",
-    colorClass: "border-[var(--medium)]",
-    dotClass: "bg-[var(--medium)]",
-    desc: "Active testing with safe payloads. Recommended for most sites.",
-    featured: true,
-    checks: [
-      "Everything in Quick, plus:",
-      "CORS Misconfiguration",
-      "XSS Detection (Reflected)",
-    ],
+    id: "api" as const,
+    name: "API",
+    desc: "Test API endpoints for prompt injection, fuzzing, auth bypass, and OWASP Top 10.",
+    icon: "🔌",
+    comingSoon: true,
   },
   {
-    id: "deep" as const,
-    name: "Deep",
-    time: "~1-3 minutes",
-    modules: 13,
-    color: "var(--critical)",
-    colorClass: "border-[var(--critical)]",
-    dotClass: "bg-[var(--critical)]",
-    desc: "Full pentest simulation. Aggressive testing enabled.",
-    checks: [
-      "Everything in Standard, plus:",
-      "Port Scanning (top 100)",
-      "Advanced XSS (DOM + Mutation)",
-      "CORS Origin Bypass",
-      "Cookie Analysis",
-      "Error Page Fuzzing",
-      "Header Fuzzing (CRLF)",
-    ],
+    id: "infrastructure" as const,
+    name: "Infrastructure",
+    desc: "Analyze code repositories for vulnerabilities, secrets, and dependency issues.",
+    icon: "🖥️",
+    comingSoon: true,
   },
 ];
+
+const scanLevels: Record<string, Array<{
+  id: "quick" | "standard" | "deep";
+  name: string;
+  time: string;
+  modules: number;
+  color: string;
+  colorClass: string;
+  dotClass: string;
+  desc: string;
+  featured?: boolean;
+  checks: string[];
+}>> = {
+  website: [
+    {
+      id: "quick" as const,
+      name: "Quick",
+      time: "~15 seconds",
+      modules: 5,
+      color: "var(--accent)",
+      colorClass: "border-[var(--accent)]",
+      dotClass: "bg-[var(--accent)]",
+      desc: "Passive security checks. Zero risk to production.",
+      checks: [
+        "Security Headers",
+        "SSL/TLS Certificate",
+        "Cookie Security",
+        "Information Disclosure",
+        "Mixed Content",
+      ],
+    },
+    {
+      id: "standard" as const,
+      name: "Standard",
+      time: "~30 seconds",
+      modules: 7,
+      color: "var(--medium)",
+      colorClass: "border-[var(--medium)]",
+      dotClass: "bg-[var(--medium)]",
+      desc: "Active testing with safe payloads. Recommended for most sites.",
+      featured: true,
+      checks: [
+        "Everything in Quick, plus:",
+        "CORS Misconfiguration",
+        "XSS Detection (Reflected)",
+      ],
+    },
+    {
+      id: "deep" as const,
+      name: "Deep",
+      time: "~1-3 minutes",
+      modules: 13,
+      color: "var(--critical)",
+      colorClass: "border-[var(--critical)]",
+      dotClass: "bg-[var(--critical)]",
+      desc: "Full pentest simulation. Aggressive testing enabled.",
+      checks: [
+        "Everything in Standard, plus:",
+        "Port Scanning (top 100)",
+        "Advanced XSS (DOM + Mutation)",
+        "CORS Origin Bypass",
+        "Cookie Analysis",
+        "Error Page Fuzzing",
+        "Header Fuzzing (CRLF)",
+      ],
+    },
+  ],
+  api: [
+    {
+      id: "quick" as const,
+      name: "Quick",
+      time: "~15 seconds",
+      modules: 0,
+      color: "var(--accent)",
+      colorClass: "border-[var(--accent)]",
+      dotClass: "bg-[var(--accent)]",
+      desc: "Basic API endpoint discovery and security header checks.",
+      checks: [
+        "OpenAPI spec discovery",
+        "Basic auth checks",
+        "CORS configuration",
+      ],
+    },
+    {
+      id: "standard" as const,
+      name: "Standard",
+      time: "~1 minute",
+      modules: 3,
+      color: "var(--medium)",
+      colorClass: "border-[var(--medium)]",
+      dotClass: "bg-[var(--medium)]",
+      desc: "Prompt injection and common API vulnerability testing.",
+      featured: true,
+      checks: [
+        "Everything in Quick, plus:",
+        "Prompt Injection Detection",
+        "SQL injection fuzzing",
+        "Path traversal testing",
+      ],
+    },
+    {
+      id: "deep" as const,
+      name: "Deep",
+      time: "~3-5 minutes",
+      modules: 6,
+      color: "var(--critical)",
+      colorClass: "border-[var(--critical)]",
+      dotClass: "bg-[var(--critical)]",
+      desc: "Full API security audit with AI-generated payloads.",
+      checks: [
+        "Everything in Standard, plus:",
+        "AI-generated adversarial payloads",
+        "Authentication bypass testing",
+        "Advanced prompt injection",
+        "Rate limit testing",
+      ],
+    },
+  ],
+  infrastructure: [
+    {
+      id: "quick" as const,
+      name: "Quick",
+      time: "~10 seconds",
+      modules: 2,
+      color: "var(--accent)",
+      colorClass: "border-[var(--accent)]",
+      dotClass: "bg-[var(--accent)]",
+      desc: "Fast dependency and secrets scanning.",
+      checks: [
+        "Dependency CVE scanning",
+        "Hardcoded secrets detection",
+      ],
+    },
+    {
+      id: "standard" as const,
+      name: "Standard",
+      time: "~30 seconds",
+      modules: 3,
+      color: "var(--medium)",
+      colorClass: "border-[var(--medium)]",
+      dotClass: "bg-[var(--medium)]",
+      desc: "AI-powered code pattern analysis.",
+      featured: true,
+      checks: [
+        "Everything in Quick, plus:",
+        "AI-powered code pattern analysis",
+        "SQLi/XSS sink detection",
+      ],
+    },
+    {
+      id: "deep" as const,
+      name: "Deep",
+      time: "~2-3 minutes",
+      modules: 4,
+      color: "var(--critical)",
+      colorClass: "border-[var(--critical)]",
+      dotClass: "bg-[var(--critical)]",
+      desc: "Full code audit with AI-generated patches.",
+      checks: [
+        "Everything in Standard, plus:",
+        "AI-generated fix suggestions",
+        "Comprehensive code audit",
+      ],
+    },
+  ],
+};
 
 export default function NewScanPage() {
   const router = useRouter();
   const [url, setUrl] = useState("");
+  const [scanType, setScanType] = useState<"website" | "api" | "infrastructure">("website");
   const [level, setLevel] = useState<"quick" | "standard" | "deep">("standard");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const currentLevels = scanLevels[scanType];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,6 +225,7 @@ export default function NewScanPage() {
       const scan = await trpcClient.scan.create.mutate({
         targetUrl: normalizedUrl,
         scanLevel: level,
+        scanType,
       });
       router.push(`/dashboard/scans/${scan.id}`);
     } catch (err: unknown) {
@@ -115,7 +253,7 @@ export default function NewScanPage() {
           New Security Scan
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Enter a URL and choose your scan depth to get started.
+          Choose a scan type, enter a target, and select your scan depth.
         </p>
       </div>
 
@@ -145,13 +283,51 @@ export default function NewScanPage() {
           )}
         </div>
 
+        {/* Scan Type Selector */}
+        <div>
+          <label className="mb-3 block text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+            Scan Type
+          </label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            {scanTypes.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                disabled={!!(t as { comingSoon?: boolean }).comingSoon}
+                onClick={() => {
+                  setScanType(t.id);
+                  setLevel("standard");
+                }}
+                className={`relative rounded-xl border p-4 text-left transition-all ${
+                  (t as { comingSoon?: boolean }).comingSoon
+                    ? "border-[var(--border)] bg-[var(--bg-card)] opacity-50 cursor-not-allowed"
+                    : scanType === t.id
+                      ? "border-[var(--accent)] bg-[var(--accent-dim)]"
+                      : "border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent-dim)] hover:bg-[var(--bg-card-hover)]"
+                }`}
+              >
+                {(t as { comingSoon?: boolean }).comingSoon && (
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)] border border-[var(--border)]">
+                    Coming Soon
+                  </div>
+                )}
+                <div className="text-xl mb-1">{t.icon}</div>
+                <div className="text-sm font-semibold">{t.name}</div>
+                <div className="mt-1 text-xs text-[var(--text-secondary)]">
+                  {t.desc}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Scan Level Selector */}
         <div>
           <label className="mb-3 block text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
             Scan Level
           </label>
           <div className="grid gap-4 sm:grid-cols-3">
-            {scanLevels.map((l) => (
+            {currentLevels.map((l) => (
               <button
                 key={l.id}
                 type="button"

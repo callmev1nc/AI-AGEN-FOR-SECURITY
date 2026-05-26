@@ -13,12 +13,23 @@ export interface VulnerabilityResult {
   remediation: string;
   cvssScore?: number;
   affectedUrl: string;
+  suggestedFix?: string;
+  filePath?: string;
+  lineStart?: number;
+  lineEnd?: number;
 }
 
 /**
  * Every scanner module must export a function matching this signature.
  */
 export type ScannerModule = (targetUrl: string) => Promise<VulnerabilityResult[]>;
+
+export interface ScannerEntry {
+  name: string;
+  scan: ScannerModule;
+  level: "quick" | "standard" | "deep";
+  scanType: "website" | "api" | "infrastructure";
+}
 
 /**
  * Helper to safely access headers by name from IncomingHttpHeaders.

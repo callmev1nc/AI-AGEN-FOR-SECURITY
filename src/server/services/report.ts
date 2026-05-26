@@ -23,7 +23,12 @@ export async function generatePdfReport(scanId: string, userId: string) {
     description: v.description,
     evidence: v.evidence || undefined,
     remediation: v.remediation,
+    cvssScore: v.cvssScore ?? undefined,
     affectedUrl: v.affectedUrl,
+    suggestedFix: v.suggestedFix ?? undefined,
+    filePath: v.filePath ?? undefined,
+    lineStart: v.lineStart ?? undefined,
+    lineEnd: v.lineEnd ?? undefined,
   }));
 
   const element = React.createElement(SecurityReport, {

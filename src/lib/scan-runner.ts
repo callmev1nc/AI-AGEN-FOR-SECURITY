@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { VulnerabilityResult, Severity } from "@/lib/scanners/types";
+import type { VulnerabilityResult, Severity, ScannerEntry } from "@/lib/scanners/types";
 import { logger } from "@/lib/logger";
 
 import { scan as scanHeaders } from "@/lib/scanners/headers";
@@ -16,26 +16,20 @@ import { scan as scanCookieAnalysis } from "@/lib/scanners/cookie-analysis";
 import { scan as scanErrorFuzzing } from "@/lib/scanners/error-fuzzing";
 import { scan as scanHeaderFuzzing } from "@/lib/scanners/header-fuzzing";
 
-interface ScannerEntry {
-  name: string;
-  scan: (targetUrl: string) => Promise<VulnerabilityResult[]>;
-  level: "quick" | "standard" | "deep";
-}
-
 const SCANNER_MODULES: ScannerEntry[] = [
-  { name: "Security Headers", scan: scanHeaders, level: "quick" },
-  { name: "SSL/TLS", scan: scanSsl, level: "quick" },
-  { name: "Cookies", scan: scanCookies, level: "quick" },
-  { name: "Information Disclosure", scan: scanInfoDisclosure, level: "quick" },
-  { name: "Mixed Content", scan: scanMixedContent, level: "quick" },
-  { name: "CORS", scan: scanCors, level: "standard" },
-  { name: "XSS", scan: scanXss, level: "standard" },
-  { name: "Port Scan", scan: scanPorts, level: "deep" },
-  { name: "XSS Advanced", scan: scanXssAdvanced, level: "deep" },
-  { name: "CORS Advanced", scan: scanCorsAdvanced, level: "deep" },
-  { name: "Cookie Analysis", scan: scanCookieAnalysis, level: "deep" },
-  { name: "Error Fuzzing", scan: scanErrorFuzzing, level: "deep" },
-  { name: "Header Fuzzing", scan: scanHeaderFuzzing, level: "deep" },
+  { name: "Security Headers", scan: scanHeaders, level: "quick", scanType: "website" },
+  { name: "SSL/TLS", scan: scanSsl, level: "quick", scanType: "website" },
+  { name: "Cookies", scan: scanCookies, level: "quick", scanType: "website" },
+  { name: "Information Disclosure", scan: scanInfoDisclosure, level: "quick", scanType: "website" },
+  { name: "Mixed Content", scan: scanMixedContent, level: "quick", scanType: "website" },
+  { name: "CORS", scan: scanCors, level: "standard", scanType: "website" },
+  { name: "XSS", scan: scanXss, level: "standard", scanType: "website" },
+  { name: "Port Scan", scan: scanPorts, level: "deep", scanType: "website" },
+  { name: "XSS Advanced", scan: scanXssAdvanced, level: "deep", scanType: "website" },
+  { name: "CORS Advanced", scan: scanCorsAdvanced, level: "deep", scanType: "website" },
+  { name: "Cookie Analysis", scan: scanCookieAnalysis, level: "deep", scanType: "website" },
+  { name: "Error Fuzzing", scan: scanErrorFuzzing, level: "deep", scanType: "website" },
+  { name: "Header Fuzzing", scan: scanHeaderFuzzing, level: "deep", scanType: "website" },
 ];
 
 const SEVERITY_DEDUCTIONS: Record<Severity, number> = {
@@ -66,10 +60,11 @@ export async function runScanInline(params: {
   scanId: string;
   targetUrl: string;
   scanLevel: "quick" | "standard" | "deep";
+  scanType?: "website" | "api" | "infrastructure";
 }): Promise<void> {
-  const { scanId, targetUrl, scanLevel } = params;
+  const { scanId, targetUrl, scanLevel, scanType = "website" } = params;
 
-  logger.info("ScanRunner", `Starting scan ${scanId} for ${targetUrl} (level: ${scanLevel})`);
+  logger.info("ScanRunner", `Starting scan ${scanId} for ${targetUrl} (type: ${scanType}, level: ${scanLevel})`);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -84,6 +79,7 @@ export async function runScanInline(params: {
   const startedAt = Date.now();
 
   const activeModules = SCANNER_MODULES.filter((m) => {
+    if (m.scanType !== scanType) return false;
     if (scanLevel === "quick") return m.level === "quick";
     if (scanLevel === "standard") return m.level === "quick" || m.level === "standard";
     return true;
@@ -164,6 +160,10 @@ export async function runScanInline(params: {
       remediation: f.remediation,
       cvssScore: f.cvssScore || null,
       affectedUrl: f.affectedUrl,
+      suggestedFix: f.suggestedFix ?? null,
+      filePath: f.filePath ?? null,
+      lineStart: f.lineStart ?? null,
+      lineEnd: f.lineEnd ?? null,
     }));
 
     const batchSize = 50;
