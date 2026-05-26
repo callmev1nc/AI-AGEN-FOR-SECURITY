@@ -17,14 +17,12 @@ const scanTypes = [
     name: "API",
     desc: "Test API endpoints for prompt injection, fuzzing, auth bypass, and OWASP Top 10.",
     icon: "🔌",
-    comingSoon: true,
   },
   {
     id: "infrastructure" as const,
     name: "Infrastructure",
     desc: "Analyze code repositories for vulnerabilities, secrets, and dependency issues.",
     icon: "🖥️",
-    comingSoon: true,
   },
 ];
 
@@ -99,49 +97,49 @@ const scanLevels: Record<string, Array<{
       id: "quick" as const,
       name: "Quick",
       time: "~15 seconds",
-      modules: 0,
+      modules: 1,
       color: "var(--accent)",
       colorClass: "border-[var(--accent)]",
       dotClass: "bg-[var(--accent)]",
-      desc: "Basic API endpoint discovery and security header checks.",
+      desc: "Basic prompt injection detection with static payloads.",
       checks: [
-        "OpenAPI spec discovery",
-        "Basic auth checks",
-        "CORS configuration",
+        "Direct instruction override testing",
+        "Role confusion attacks",
+        "Data exfiltration attempts",
       ],
     },
     {
       id: "standard" as const,
       name: "Standard",
       time: "~1 minute",
-      modules: 3,
+      modules: 2,
       color: "var(--medium)",
       colorClass: "border-[var(--medium)]",
       dotClass: "bg-[var(--medium)]",
-      desc: "Prompt injection and common API vulnerability testing.",
+      desc: "Advanced injection techniques and jailbreak patterns.",
       featured: true,
       checks: [
         "Everything in Quick, plus:",
-        "Prompt Injection Detection",
-        "SQL injection fuzzing",
-        "Path traversal testing",
+        "Base64/unicode evasion payloads",
+        "Multi-turn chained attacks",
+        "DAN jailbreak variants",
       ],
     },
     {
       id: "deep" as const,
       name: "Deep",
-      time: "~3-5 minutes",
+      time: "~2-3 minutes",
       modules: 6,
       color: "var(--critical)",
       colorClass: "border-[var(--critical)]",
       dotClass: "bg-[var(--critical)]",
-      desc: "Full API security audit with AI-generated payloads.",
+      desc: "Full AI security audit with context exploitation techniques.",
       checks: [
         "Everything in Standard, plus:",
-        "AI-generated adversarial payloads",
-        "Authentication bypass testing",
-        "Advanced prompt injection",
-        "Rate limit testing",
+        "System prompt extraction attempts",
+        "Context boundary attacks",
+        "Tool-use exploitation testing",
+        "Indirect injection via markdown/HTML",
       ],
     },
   ],
@@ -156,8 +154,8 @@ const scanLevels: Record<string, Array<{
       dotClass: "bg-[var(--accent)]",
       desc: "Fast dependency and secrets scanning.",
       checks: [
-        "Dependency CVE scanning",
-        "Hardcoded secrets detection",
+        "Dependency CVE scanning (package.json, requirements.txt)",
+        "Hardcoded secrets detection (20+ secret patterns)",
       ],
     },
     {
@@ -168,12 +166,12 @@ const scanLevels: Record<string, Array<{
       color: "var(--medium)",
       colorClass: "border-[var(--medium)]",
       dotClass: "bg-[var(--medium)]",
-      desc: "AI-powered code pattern analysis.",
+      desc: "Code pattern analysis for common vulnerabilities.",
       featured: true,
       checks: [
         "Everything in Quick, plus:",
-        "AI-powered code pattern analysis",
-        "SQLi/XSS sink detection",
+        "Dangerous code pattern detection (eval, innerHTML, SQL concat)",
+        "Prototype pollution & path traversal checks",
       ],
     },
     {
@@ -184,11 +182,11 @@ const scanLevels: Record<string, Array<{
       color: "var(--critical)",
       colorClass: "border-[var(--critical)]",
       dotClass: "bg-[var(--critical)]",
-      desc: "Full code audit with AI-generated patches.",
+      desc: "Full AI-powered code audit with patches.",
       checks: [
         "Everything in Standard, plus:",
-        "AI-generated fix suggestions",
-        "Comprehensive code audit",
+        "AI-generated fix suggestions (Claude-powered)",
+        "Batch code audit with AI analysis",
       ],
     },
   ],
@@ -293,24 +291,16 @@ export default function NewScanPage() {
               <button
                 key={t.id}
                 type="button"
-                disabled={!!(t as { comingSoon?: boolean }).comingSoon}
                 onClick={() => {
                   setScanType(t.id);
                   setLevel("standard");
                 }}
                 className={`relative rounded-xl border p-4 text-left transition-all ${
-                  (t as { comingSoon?: boolean }).comingSoon
-                    ? "border-[var(--border)] bg-[var(--bg-card)] opacity-50 cursor-not-allowed"
-                    : scanType === t.id
-                      ? "border-[var(--accent)] bg-[var(--accent-dim)]"
-                      : "border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent-dim)] hover:bg-[var(--bg-card-hover)]"
+                  scanType === t.id
+                    ? "border-[var(--accent)] bg-[var(--accent-dim)]"
+                    : "border-[var(--border)] bg-[var(--bg-card)] hover:border-[var(--accent-dim)] hover:bg-[var(--bg-card-hover)]"
                 }`}
               >
-                {(t as { comingSoon?: boolean }).comingSoon && (
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--bg-card)] px-2 py-0.5 text-[10px] font-medium text-[var(--text-muted)] border border-[var(--border)]">
-                    Coming Soon
-                  </div>
-                )}
                 <div className="text-xl mb-1">{t.icon}</div>
                 <div className="text-sm font-semibold">{t.name}</div>
                 <div className="mt-1 text-xs text-[var(--text-secondary)]">

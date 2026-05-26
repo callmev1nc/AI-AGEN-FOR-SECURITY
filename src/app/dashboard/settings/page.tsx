@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -169,16 +170,47 @@ export default function SettingsPage() {
           <div>
             <div className="text-sm font-medium capitalize">{plan} Plan</div>
             <div className="text-xs text-[var(--text-muted)]">
-              {plan === "free" ? "5 scans per month" : plan === "pro" ? "Unlimited scans" : "Unlimited scans + priority support"}
+              {plan === "free" ? "5 scans per hour" : plan === "pro" ? "30 scans per hour" : "100 scans per hour"}
             </div>
           </div>
           <span className="rounded-lg border border-[var(--accent-dim)] bg-[var(--accent-dim)] px-3 py-1 text-xs font-medium text-[var(--accent)]">
             Current Plan
           </span>
         </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          Upgrading to Pro or Enterprise will be available soon.
-        </p>
+        <div className="flex gap-3">
+          {plan === "free" && (
+            <button
+              onClick={() => window.location.href = "/pricing"}
+              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-all hover:brightness-110"
+            >
+              Upgrade Plan
+            </button>
+          )}
+          {(plan === "pro" || plan === "enterprise") && (
+            <button
+              onClick={async () => {
+                setPortalLoading(true);
+                try {
+                  const { url } = await trpcClient.billing.createPortal.mutate();
+                  if (url) window.location.href = url;
+                } catch {
+                  // handled by finally
+                } finally {
+                  setPortalLoading(false);
+                }
+              }}
+              disabled={portalLoading}
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
+            >
+              {portalLoading ? "Loading..." : "Manage Billing"}
+            </button>
+          )}
+        </div>
+        {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "success" && (
+          <div className="rounded-lg bg-[var(--accent-dim)] p-3 text-sm text-[var(--accent)]">
+            Welcome to Pro! Your plan has been upgraded successfully.
+          </div>
+        )}
       </div>
     </div>
   );

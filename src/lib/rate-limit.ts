@@ -1,10 +1,17 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
-let ratelimit: Ratelimit | null = null;
+const PLAN_LIMITS: Record<string, number> = {
+  free: 5,
+  pro: 30,
+  enterprise: 100,
+};
 
-function getRatelimit() {
-  if (ratelimit) return ratelimit;
+const ratelimiters = new Map<number, Ratelimit>();
+
+function getRatelimit(maxRequests: number): Ratelimit | null {
+  const existing = ratelimiters.get(maxRequests);
+  if (existing) return existing;
 
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -12,54 +19,58 @@ function getRatelimit() {
   if (!url || !token) return null;
 
   const redis = new Redis({ url, token });
-  ratelimit = new Ratelimit({
+  const limiter = new Ratelimit({
     redis,
-    limiter: Ratelimit.slidingWindow(5, "1 h"),
-    prefix: "securescan:ratelimit",
+    limiter: Ratelimit.slidingWindow(maxRequests, "1 h"),
+    prefix: `securescan:ratelimit:${maxRequests}`,
   });
+  ratelimiters.set(maxRequests, limiter);
 
-  return ratelimit;
+  return limiter;
 }
 
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
 const WINDOW_MS = 60 * 60 * 1000;
-const MAX_REQUESTS = 5;
 
-function checkInMemory(identifier: string) {
+function checkInMemory(identifier: string, maxRequests: number) {
   const now = Date.now();
   const entry = inMemoryStore.get(identifier);
 
   if (!entry || now > entry.resetAt) {
     inMemoryStore.set(identifier, { count: 1, resetAt: now + WINDOW_MS });
-    return { success: true, limit: MAX_REQUESTS, remaining: MAX_REQUESTS - 1, reset: now + WINDOW_MS };
+    return { success: true, limit: maxRequests, remaining: maxRequests - 1, reset: now + WINDOW_MS };
   }
 
   entry.count++;
-  const remaining = Math.max(0, MAX_REQUESTS - entry.count);
+  const remaining = Math.max(0, maxRequests - entry.count);
   return {
-    success: entry.count <= MAX_REQUESTS,
-    limit: MAX_REQUESTS,
+    success: entry.count <= maxRequests,
+    limit: maxRequests,
     remaining,
     reset: entry.resetAt,
   };
 }
 
-export async function checkRateLimit(identifier: string): Promise<{
+export async function checkRateLimit(
+  identifier: string,
+  plan?: string
+): Promise<{
   success: boolean;
   limit: number;
   remaining: number;
   reset: number;
 }> {
-  const limiter = getRatelimit();
+  const maxRequests = PLAN_LIMITS[plan || "free"] || 5;
+  const limiter = getRatelimit(maxRequests);
 
   if (!limiter) {
-    return checkInMemory(identifier);
+    return checkInMemory(identifier, maxRequests);
   }
 
   const result = await limiter.limit(identifier);
   return {
     success: result.success,
-    limit: result.limit,
+    limit: maxRequests,
     remaining: result.remaining,
     reset: result.reset,
   };
