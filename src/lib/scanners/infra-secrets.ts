@@ -1,6 +1,6 @@
 import type { ScannerModule, VulnerabilityResult } from "./types";
 
-const SECRET_PATTERNS: Array<{
+export const SECRET_PATTERNS: Array<{
   name: string;
   regex: RegExp;
   severity: VulnerabilityResult["severity"];

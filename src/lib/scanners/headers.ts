@@ -145,7 +145,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fetchHeaders(targetUrl: string): Promise<http.IncomingHttpHeaders | null> {
+export function fetchHeaders(targetUrl: string): Promise<http.IncomingHttpHeaders | null> {
   return new Promise((resolve) => {
     const parsed = new URL(targetUrl);
     const lib = parsed.protocol === "https:" ? https : http;
