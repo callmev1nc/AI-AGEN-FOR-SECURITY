@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { fetchBody as httpGetBody } from "./http";
 
 /**
  * Test for reflected XSS by injecting benign test payloads into URL query
@@ -151,54 +150,8 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-interface HttpResponse {
-  statusCode: number;
-  body: string;
-}
-
 function appendQueryParam(baseUrl: string, name: string, value: string): string {
   const parsed = new URL(baseUrl);
   parsed.searchParams.set(name, value);
   return parsed.toString();
-}
-
-function httpGetBody(url: string): Promise<HttpResponse | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(url);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      timeout: 10000,
-    };
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer | string) => {
-        if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-        else chunks.push(chunk);
-      });
-      res.on("end", () => {
-        resolve({
-          statusCode: res.statusCode || 0,
-          body: Buffer.concat(chunks).toString("utf8"),
-        });
-      });
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
-  });
 }

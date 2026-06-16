@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Check for missing or misconfigured security headers.
@@ -145,34 +144,14 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function fetchHeaders(targetUrl: string): Promise<http.IncomingHttpHeaders | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(targetUrl);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      timeout: 10000,
-    };
-
-    const req = lib.request(options, (res) => {
-      resolve(res.headers);
-      res.resume(); // drain the response so the socket can be reused
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+export async function fetchHeaders(
+  targetUrl: string
+): Promise<Record<string, string> | null> {
+  const res = await scannerRequest(targetUrl, {
+    method: "GET",
+    headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+    followRedirects: false,
+    timeoutMs: 10000,
   });
+  return res ? res.headers : null;
 }

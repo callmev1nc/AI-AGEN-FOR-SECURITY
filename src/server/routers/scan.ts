@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
+import { createTRPCRouter, protectedProcedure, internalError } from "@/lib/trpc";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { resolveAndAssertPublic } from "@/lib/safe-fetch";
 import { generatePdfReport } from "@/server/services/report";
 import { generateAiReport } from "@/server/services/ai-report-writer";
 
@@ -15,7 +16,7 @@ export const scanRouter = createTRPCRouter({
       .limit(50);
 
     if (error) {
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      throw internalError("ScanRouter", error);
     }
     return data;
   }),
@@ -71,15 +72,14 @@ export const scanRouter = createTRPCRouter({
         targetUrl: z.string().url("Invalid URL").refine((url) => {
           try {
             const parsed = new URL(url);
-            const host = parsed.hostname;
-            if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0") return false;
-            if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return false;
-            if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
-            return true;
+            // Sync sanity check only — the real SSRF/target check (private IPs,
+            // cloud metadata, IPv6, DNS-rebinding) is the async
+            // resolveAndAssertPublic call in the handler below.
+            return parsed.protocol === "http:" || parsed.protocol === "https:";
           } catch {
             return false;
           }
-        }, "Scanning private/local addresses is not allowed"),
+        }, "Target must be a valid http(s) URL"),
         scanLevel: z.enum(["quick", "standard", "deep"]).default("standard"),
         scanType: z.enum(["website", "api", "infrastructure"]).default("website"),
       })
@@ -101,6 +101,19 @@ export const scanRouter = createTRPCRouter({
         });
       }
 
+      // SSRF defense-in-depth: confirm the target resolves to a public address
+      // before we create/queue anything. Blocks cloud metadata (169.254.169.254),
+      // RFC1918, loopback, link-local, and DNS-rebinding. safeFetch re-checks
+      // at scan time; this gives a fast, friendly error at creation.
+      try {
+        await resolveAndAssertPublic(new URL(input.targetUrl).hostname);
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Scanning private, local, or internal addresses is not allowed.",
+        });
+      }
+
       const { data: scan, error } = await ctx.admin
         .from("scans")
         .insert({
@@ -114,7 +127,7 @@ export const scanRouter = createTRPCRouter({
         .single();
 
       if (error) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        throw internalError("ScanRouter", error);
       }
 
       return scan;
@@ -143,7 +156,7 @@ export const scanRouter = createTRPCRouter({
       const { data, error } = await query;
 
       if (error) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        throw internalError("ScanRouter", error);
       }
 
       const hasMore = data.length > limit;
@@ -190,7 +203,7 @@ export const scanRouter = createTRPCRouter({
         .order("severity", { ascending: true });
 
       if (error) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        throw internalError("ScanRouter", error);
       }
       return data;
     }),

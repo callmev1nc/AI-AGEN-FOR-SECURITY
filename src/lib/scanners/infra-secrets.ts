@@ -1,4 +1,5 @@
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 export const SECRET_PATTERNS: Array<{
   name: string;
@@ -174,12 +175,13 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 };
 
 async function fetchUrl(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (response.ok) return response.text();
-  } catch {
-    // not found
-  }
+  const res = await scannerRequest(url, {
+    method: "GET",
+    followRedirects: true,
+    timeoutMs: 10000,
+  });
+  if (!res) return null;
+  if (res.statusCode >= 200 && res.statusCode < 300) return res.body;
   return null;
 }
 

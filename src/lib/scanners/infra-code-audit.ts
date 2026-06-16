@@ -1,6 +1,7 @@
 import type { ScannerModule, VulnerabilityResult } from "./types";
 import { analyzeBatchWithAi } from "@/server/services/code-analyzer";
 import { logger } from "@/lib/logger";
+import { scannerRequest } from "./http";
 
 const SOURCE_FILES = [
   "src/app/**/*.ts", "src/app/**/*.tsx", "src/lib/**/*.ts",
@@ -37,11 +38,12 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 };
 
 async function fetchUrl(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (response.ok) return response.text();
-  } catch {
-    // not found
-  }
+  const res = await scannerRequest(url, {
+    method: "GET",
+    followRedirects: true,
+    timeoutMs: 10000,
+  });
+  if (!res) return null;
+  if (res.statusCode >= 200 && res.statusCode < 300) return res.body;
   return null;
 }

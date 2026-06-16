@@ -1,23 +1,36 @@
 import { handleWebhook } from "@/server/services/billing";
 import { logger } from "@/lib/logger";
-import { createHmac } from "crypto";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createHmac, timingSafeEqual } from "crypto";
 
+/**
+ * Verify a Stripe webhook signature (StripeSigningScheme: t=...,v1=...).
+ * - Robust parse: uses indexOf("=") so signature segments containing "="
+ *   survive (split("=") would corrupt them).
+ * - Constant-time HMAC comparison to avoid timing side-channels.
+ * - Rejects timestamps outside ±300s (replay window) per Stripe guidance.
+ */
 function verifyStripeSignature(body: string, signature: string, secret: string): boolean {
-  const parts = signature.split(",");
   let timestamp = "";
   let v1Signature = "";
-  for (const part of parts) {
-    const [key, value] = part.split("=");
+  for (const part of signature.split(",")) {
+    const eq = part.indexOf("=");
+    if (eq < 0) continue;
+    const key = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1);
     if (key === "t") timestamp = value;
-    if (key === "v1") v1Signature = value;
+    else if (key === "v1") v1Signature = value;
   }
   if (!timestamp || !v1Signature) return false;
 
   const age = Math.floor(Date.now() / 1000) - Number(timestamp);
-  if (age > 300 || age < -300) return false;
+  if (Number.isNaN(age) || age > 300 || age < -300) return false;
 
   const expected = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
-  return expected === v1Signature;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(v1Signature);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export async function POST(req: Request) {
@@ -41,7 +54,30 @@ export async function POST(req: Request) {
     }
 
     const event = JSON.parse(body);
-    await handleWebhook(event);
+
+    // Idempotency: Stripe may redeliver the same event. Skip if already seen.
+    const eventId = typeof event?.id === "string" ? event.id : null;
+    if (eventId) {
+      const admin = createAdminClient();
+      const { data: existing } = await admin
+        .from("stripe_events")
+        .select("eventId")
+        .eq("eventId", eventId)
+        .maybeSingle();
+      if (existing) {
+        return Response.json({ received: true, duplicate: true });
+      }
+      await handleWebhook(event);
+      await admin.from("stripe_events").upsert(
+        {
+          eventId,
+          type: typeof event?.type === "string" ? event.type : null,
+        },
+        { onConflict: "eventId" }
+      );
+    } else {
+      await handleWebhook(event);
+    }
 
     return Response.json({ received: true });
   } catch (err) {

@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Fetch the HTML page and parse for http:// URLs in resource attributes
@@ -101,52 +100,12 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fetchHtml(targetUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(targetUrl);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      timeout: 10000,
-    };
-
-    const req = lib.request(options, (res) => {
-      // Follow redirects
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        try {
-          const redirectUrl = new URL(res.headers.location, targetUrl).toString();
-          res.resume();
-          fetchHtml(redirectUrl).then(resolve);
-          return;
-        } catch {
-          // Invalid redirect URL
-        }
-      }
-
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer | string) => {
-        if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-        else chunks.push(chunk);
-      });
-      res.on("end", () => {
-        resolve(Buffer.concat(chunks).toString("utf8"));
-      });
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+async function fetchHtml(targetUrl: string): Promise<string | null> {
+  const res = await scannerRequest(targetUrl, {
+    method: "GET",
+    headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+    followRedirects: true, // safeFetch re-validates each hop
+    timeoutMs: 10000,
   });
+  return res ? res.body : null;
 }
