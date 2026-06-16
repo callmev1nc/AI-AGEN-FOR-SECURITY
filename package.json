@@ -4,18 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@prisma/client": "^6",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/ssr": "^0.6",
     "@supabase/supabase-js": "^2",
@@ -32,7 +27,6 @@
     "lucide-react": "^1.16",
     "next": "16.2.6",
     "p-limit": "^7.3.0",
-    "prisma": "^6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2",

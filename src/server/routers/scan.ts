@@ -6,6 +6,20 @@ import { resolveAndAssertPublic } from "@/lib/safe-fetch";
 import { generatePdfReport } from "@/server/services/report";
 import { generateAiReport } from "@/server/services/ai-report-writer";
 
+/** Severity display order (critical first). Postgres text-enum ordering is
+ *  alphabetical, which puts "info" before "low" before "medium", so we sort
+ *  client-side after fetching. */
+const SEVERITY_RANK: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+function bySeverityRank(a: { severity: string }, b: { severity: string }): number {
+  return (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99);
+}
+
 export const scanRouter = createTRPCRouter({
   listReports: protectedProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.admin
@@ -200,11 +214,12 @@ export const scanRouter = createTRPCRouter({
         .from("vulnerabilities")
         .select("*")
         .eq("scanId", input.scanId)
-        .order("severity", { ascending: true });
+        .order("createdAt", { ascending: false });
 
       if (error) {
         throw internalError("ScanRouter", error);
       }
-      return data;
+      // Sort by real severity rank (critical first) instead of alphabetical.
+      return (data ?? []).sort(bySeverityRank);
     }),
 });

@@ -91,7 +91,9 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
         const parsed = JSON.parse(content);
         const allDeps = { ...parsed.dependencies, ...parsed.devDependencies };
         for (const [pkg, ver] of Object.entries(allDeps)) {
-          const cleanVer = String(ver).replace(/^[\^~>=<]/, "");
+          // Strip the full leading range prefix (^, ~, >=, <=, >, <, =, v)
+          // so ">=3.0.0"/"^1.2.3"/"~2.1.0" all reduce to comparable digits.
+          const cleanVer = String(ver).replace(/^[^\d]+/, "");
           for (const cve of CVE_PATTERNS) {
             if (pkg === cve.package && cve.versionRange(cleanVer)) {
               const existing = findings.find((f) => f.title.includes(cve.name));

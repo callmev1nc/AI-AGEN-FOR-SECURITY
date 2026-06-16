@@ -26,6 +26,8 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     if (!resp) continue;
 
     const body = resp.body.toLowerCase();
+    // Only flag indicators in reasonably-sized API responses (see basic scanner).
+    if (body.length > 100_000) continue;
     const matchedIndicator = SUCCESS_INDICATORS.find((ind) => body.includes(ind));
 
     if (matchedIndicator) {

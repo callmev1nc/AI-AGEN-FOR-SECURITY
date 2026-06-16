@@ -258,7 +258,10 @@ export default function NewScanPage() {
       <form onSubmit={handleSubmit} className="space-y-8">
         {/* URL Input */}
         <div>
-          <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]">
+          <label
+            htmlFor="target-url"
+            className="mb-2 block text-xs font-medium uppercase tracking-wider text-[var(--text-secondary)]"
+          >
             Target URL
           </label>
           <div className="relative">
@@ -268,7 +271,8 @@ export default function NewScanPage() {
               </svg>
             </div>
             <input
-              type="text"
+              id="target-url"
+              type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               required
