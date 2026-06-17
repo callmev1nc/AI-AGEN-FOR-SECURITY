@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, protectedProcedure, internalError } from "@/lib/trpc";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { resolveAndAssertPublic } from "@/lib/safe-fetch";
+import { diffFindings, type FindingLike } from "@/lib/scan-diff";
 import { generatePdfReport } from "@/server/services/report";
 import { generateAiReport } from "@/server/services/ai-report-writer";
 
@@ -221,5 +222,50 @@ export const scanRouter = createTRPCRouter({
       }
       // Sort by real severity rank (critical first) instead of alphabetical.
       return (data ?? []).sort(bySeverityRank);
+    }),
+
+  diff: protectedProcedure
+    .input(z.object({ scanId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Current scan (ownership-scoped) with its findings.
+      const { data: current, error: curErr } = await ctx.admin
+        .from("scans")
+        .select(
+          "id, targetUrl, createdAt, status, vulnerabilities(severity, category, title, affectedUrl)"
+        )
+        .eq("id", input.scanId)
+        .eq("userId", ctx.user.id)
+        .single();
+      if (curErr || !current) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Scan not found" });
+      }
+
+      // Most recent COMPLETED scan of the same target before this one.
+      const { data: previous } = await ctx.admin
+        .from("scans")
+        .select("id, createdAt, vulnerabilities(severity, category, title, affectedUrl)")
+        .eq("userId", ctx.user.id)
+        .eq("targetUrl", current.targetUrl)
+        .eq("status", "completed")
+        .lt("createdAt", current.createdAt)
+        .order("createdAt", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!previous) {
+        return { hasBaseline: false } as const;
+      }
+
+      const diff = diffFindings(
+        (previous.vulnerabilities as FindingLike[]) ?? [],
+        (current.vulnerabilities as FindingLike[]) ?? []
+      );
+      return {
+        hasBaseline: true as const,
+        baselineCreatedAt: previous.createdAt as string,
+        addedCount: diff.added.length,
+        resolvedCount: diff.resolved.length,
+        persistedCount: diff.persisted.length,
+      };
     }),
 });

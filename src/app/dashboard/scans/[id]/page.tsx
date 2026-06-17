@@ -228,6 +228,13 @@ export default function ScanResultsPage() {
   const [aiReportError, setAiReportError] = useState("");
   const triggerSent = useRef(false);
   const [sevFilter, setSevFilter] = useState<string>("all");
+  const [diff, setDiff] = useState<{
+    hasBaseline: boolean;
+    baselineCreatedAt?: string;
+    addedCount?: number;
+    resolvedCount?: number;
+    persistedCount?: number;
+  } | null>(null);
 
   useEffect(() => {
     trpcClient.scan.byId.query({ id: scanId })
@@ -262,6 +269,16 @@ export default function ScanResultsPage() {
       }
     }, 5000);
     return () => clearInterval(interval);
+  }, [scan, scanId]);
+
+  useEffect(() => {
+    if (!scan || scan.status !== "completed") return;
+    trpcClient.scan.diff
+      .query({ scanId })
+      .then(setDiff)
+      .catch(() => {
+        /* differential is best-effort; never block the page */
+      });
   }, [scan, scanId]);
 
   if (loading) {
@@ -433,6 +450,18 @@ export default function ScanResultsPage() {
           <div className="mt-2 text-3xl font-bold text-[var(--info)]">{severityCounts.info}</div>
         </div>
       </div>
+
+      {diff?.hasBaseline && (
+        <div className="card-base flex flex-wrap items-center gap-x-8 gap-y-2 p-5">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            vs previous scan
+            {diff.baselineCreatedAt ? ` (${new Date(diff.baselineCreatedAt).toLocaleDateString()})` : ""}
+          </p>
+          <span className="text-sm font-semibold text-[var(--critical)]">+{diff.addedCount} new</span>
+          <span className="text-sm font-semibold text-[var(--accent)]">&minus;{diff.resolvedCount} resolved</span>
+          <span className="text-sm text-[var(--text-muted)]">{diff.persistedCount} unchanged</span>
+        </div>
+      )}
 
       {vulns.length === 0 ? (
         <div className="card-base flex items-center justify-center py-12 text-[var(--text-muted)]">
