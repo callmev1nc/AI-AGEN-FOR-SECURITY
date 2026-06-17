@@ -1,7 +1,6 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
 import { getHeader } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Advanced CORS testing:
@@ -128,8 +127,8 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     const resp = await sendCorsPreflight(targetUrl, tc.origin);
     if (!resp) continue;
 
-    const acao = getHeader(resp.headers as unknown as Record<string, unknown>, "access-control-allow-origin");
-    const acac = getHeader(resp.headers as unknown as Record<string, unknown>, "access-control-allow-credentials");
+    const acao = getHeader(resp, "access-control-allow-origin");
+    const acac = getHeader(resp, "access-control-allow-credentials");
 
     // Check if the origin was reflected
     if (acao === tc.origin || acao === "*") {
@@ -160,8 +159,8 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
   const subdomainOrigin = `https://test-attacker.${hostname}`;
   const subResp = await sendCorsPreflight(targetUrl, subdomainOrigin);
   if (subResp) {
-    const acao = getHeader(subResp.headers as unknown as Record<string, unknown>, "access-control-allow-origin");
-    const acac = getHeader(subResp.headers as unknown as Record<string, unknown>, "access-control-allow-credentials");
+    const acao = getHeader(subResp, "access-control-allow-origin");
+    const acac = getHeader(subResp, "access-control-allow-credentials");
     if (acao === subdomainOrigin) {
       findings.push({
         severity: acac === "true" ? "high" : "medium",
@@ -184,39 +183,19 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-function sendCorsPreflight(
+async function sendCorsPreflight(
   targetUrl: string,
   origin: string
-): Promise<http.IncomingHttpHeaders | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(targetUrl);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "OPTIONS",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        Origin: origin,
-        "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "Content-Type, Authorization, X-Custom-Header",
-        "User-Agent": "SecuPi-Scanner/1.0",
-      },
-      timeout: 8000,
-    };
-
-    const req = lib.request(options, (res) => {
-      resolve(res.headers);
-      res.resume();
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+): Promise<Record<string, string> | null> {
+  const res = await scannerRequest(targetUrl, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "GET",
+      "Access-Control-Request-Headers": "Content-Type, Authorization, X-Custom-Header",
+    },
+    followRedirects: false,
+    timeoutMs: 8000,
   });
+  return res ? res.headers : null;
 }

@@ -4,18 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
-    "postinstall": "prisma generate",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@prisma/client": "^6",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/ssr": "^0.6",
     "@supabase/supabase-js": "^2",
@@ -26,11 +21,12 @@
     "@trpc/tanstack-react-query": "^11.17.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "cheerio": "^1.2.0",
     "class-variance-authority": "^0.7",
     "clsx": "^2",
     "lucide-react": "^1.16",
     "next": "16.2.6",
-    "prisma": "^6",
+    "p-limit": "^7.3.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2",
@@ -48,6 +44,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
+    "nock": "^14.0.15",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.6"

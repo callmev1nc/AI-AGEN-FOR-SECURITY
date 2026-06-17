@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Send malformed requests to trigger errors:
@@ -195,7 +194,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 interface RawResponse {
   statusCode: number;
   body: string;
-  headers: http.IncomingHttpHeaders;
+  headers: Record<string, string>;
 }
 
 interface LeakInfo {
@@ -285,57 +284,25 @@ function checkForInfoLeak(body: string): LeakInfo | null {
   return null;
 }
 
-function sendRawRequest(
+async function sendRawRequest(
   url: string,
   method: string,
   extraHeaders: Record<string, string>,
   body?: string
 ): Promise<RawResponse | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(url);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method,
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "*/*",
-        ...extraHeaders,
-      },
-      timeout: 8000,
-    };
-
-    if (body) {
-      (options.headers as Record<string, string>)["Content-Length"] = Buffer.byteLength(body).toString();
-    }
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer | string) => {
-        if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-        else chunks.push(chunk);
-      });
-      res.on("end", () => {
-        resolve({
-          statusCode: res.statusCode || 0,
-          body: Buffer.concat(chunks).toString("utf8"),
-          headers: res.headers,
-        });
-      });
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    if (body) req.write(body);
-    req.end();
+  const res = await scannerRequest(url, {
+    method,
+    headers: {
+      Accept: "*/*",
+      ...extraHeaders,
+      ...(body ? { "Content-Length": Buffer.byteLength(body).toString() } : {}),
+    },
+    body,
+    followRedirects: false,
+    timeoutMs: 8000,
   });
+  if (!res) return null;
+  return { statusCode: res.statusCode, body: res.body, headers: res.headers };
 }
 
 function truncate(text: string, maxLen: number): string {

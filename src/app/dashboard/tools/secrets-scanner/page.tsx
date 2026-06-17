@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import ToolPageShell from "@/components/tools/ToolPageShell";
 import ToolInputForm from "@/components/tools/ToolInputForm";
-import ToolResultsDisplay, { CopyButton } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { CopyButton, ToolError } from "@/components/tools/ToolResultsDisplay";
+import { useToolPage } from "@/components/tools/useToolPage";
 import { trpcClient } from "@/lib/trpc-client";
 
 interface SecretsFinding {
@@ -22,23 +22,9 @@ interface SecretsResult {
 }
 
 export default function SecretsScannerPage() {
-  const [result, setResult] = useState<SecretsResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(content: string) {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const data = await trpcClient.tools.secretsScanner.mutate({ content });
-      setResult(data as SecretsResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Scan failed");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { result, loading, error, submit } = useToolPage<SecretsResult>((content) =>
+    trpcClient.tools.secretsScanner.mutate({ content })
+  );
 
   const severityColors: Record<string, string> = {
     critical: "var(--critical)",
@@ -54,18 +40,14 @@ export default function SecretsScannerPage() {
       description="Paste code or configuration files to scan for hardcoded secrets, API keys, tokens, and credentials. Uses regex patterns plus AI false-positive triage."
     >
       <ToolInputForm
-        onSubmit={handleSubmit}
+        onSubmit={submit}
         placeholder={`Paste code, config files, or .env contents here...\n\nExample:\nDB_PASSWORD=supersecret123\nAWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE`}
         buttonLabel="Scan for Secrets"
         loading={loading}
         rows={10}
       />
 
-      {error && (
-        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
-          {error}
-        </div>
-      )}
+      <ToolError error={error} />
 
       {result && (
         <ToolResultsDisplay>

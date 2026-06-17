@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import ToolPageShell from "@/components/tools/ToolPageShell";
 import ToolInputForm from "@/components/tools/ToolInputForm";
-import ToolResultsDisplay, { ScoreGauge, CopyButton } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { ScoreGauge, CopyButton, ToolError } from "@/components/tools/ToolResultsDisplay";
+import { useToolPage } from "@/components/tools/useToolPage";
 import { trpcClient } from "@/lib/trpc-client";
 
 interface HeaderFinding {
@@ -22,25 +22,15 @@ interface HeaderAnalysisResult {
 }
 
 export default function HeadersAnalyzerPage() {
-  const [result, setResult] = useState<HeaderAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(targetUrl: string) {
-    const url = targetUrl.startsWith("http") ? targetUrl : `https://${targetUrl}`;
-    try { new URL(url); } catch { setError("Invalid URL format"); return; }
-    setLoading(true);
-    setError("");
-    setResult(null);
+  const { result, loading, error, submit } = useToolPage<HeaderAnalysisResult>((rawUrl) => {
+    const url = rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`;
     try {
-      const data = await trpcClient.tools.headersAnalyzer.mutate({ targetUrl: url });
-      setResult(data as HeaderAnalysisResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed");
-    } finally {
-      setLoading(false);
+      new URL(url);
+    } catch {
+      throw new Error("Invalid URL format");
     }
-  }
+    return trpcClient.tools.headersAnalyzer.mutate({ targetUrl: url });
+  });
 
   const statusColors: Record<string, string> = {
     present: "var(--accent)",
@@ -54,7 +44,7 @@ export default function HeadersAnalyzerPage() {
       description="Enter a URL to analyze its HTTP security headers. Get a score, detailed findings, and AI-powered recommendations."
     >
       <ToolInputForm
-        onSubmit={handleSubmit}
+        onSubmit={submit}
         placeholder="Enter a URL (e.g. https://example.com)..."
         buttonLabel="Analyze Headers"
         loading={loading}
@@ -62,11 +52,7 @@ export default function HeadersAnalyzerPage() {
         maxLength={2048}
       />
 
-      {error && (
-        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
-          {error}
-        </div>
-      )}
+      <ToolError error={error} />
 
       {result && (
         <ToolResultsDisplay>

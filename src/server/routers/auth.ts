@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
+import { createTRPCRouter, protectedProcedure, internalError } from "@/lib/trpc";
 
 export const authRouter = createTRPCRouter({
   me: protectedProcedure.query(async ({ ctx }) => {
@@ -27,10 +26,7 @@ export const authRouter = createTRPCRouter({
         .single();
 
       if (error) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: error.message,
-        });
+        throw internalError("AuthRouter", error);
       }
       return data;
     }),

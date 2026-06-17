@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 interface CookieDetails {
   name: string;
@@ -133,43 +132,13 @@ function formatCookie(cookie: CookieDetails): string {
   return parts.join("; ");
 }
 
-function fetchCookies(targetUrl: string): Promise<CookieDetails[]> {
-  return new Promise((resolve) => {
-    const parsed = new URL(targetUrl);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      timeout: 10000,
-    };
-
-    const req = lib.request(options, (res) => {
-      const setCookieHeaders = res.headers["set-cookie"] as string[] | undefined;
-      const cookies: CookieDetails[] = [];
-
-      if (setCookieHeaders && Array.isArray(setCookieHeaders)) {
-        for (const h of setCookieHeaders) {
-          cookies.push(parseSetCookie(h));
-        }
-      }
-
-      resolve(cookies);
-      res.resume();
-    });
-
-    req.on("error", () => resolve([]));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve([]);
-    });
-
-    req.end();
+async function fetchCookies(targetUrl: string): Promise<CookieDetails[]> {
+  const res = await scannerRequest(targetUrl, {
+    method: "GET",
+    headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+    followRedirects: false,
+    timeoutMs: 10000,
   });
+  if (!res) return [];
+  return res.setCookie.map(parseSetCookie);
 }

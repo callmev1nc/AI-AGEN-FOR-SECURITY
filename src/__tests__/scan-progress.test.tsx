@@ -14,6 +14,9 @@ vi.mock("@/lib/trpc-client", () => ({
       byId: {
         query: vi.fn(),
       },
+      diff: {
+        query: vi.fn().mockResolvedValue({ hasBaseline: false }),
+      },
       exportPdf: {
         mutate: vi.fn(),
       },

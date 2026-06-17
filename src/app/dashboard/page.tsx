@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trpcClient } from "@/lib/trpc-client";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 type Scan = {
   id: string;
@@ -54,6 +55,13 @@ export default function DashboardPage() {
             completedScans.length
         )
       : null;
+  const atRiskScans = completedScans.filter((s) => (s.overallScore ?? 100) < 50).length;
+  const trendData = [...completedScans]
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map((s) => ({
+      date: new Date(s.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      score: s.overallScore ?? 0,
+    }));
   const lastScan = scans.length > 0 ? scans[0] : null;
 
   return (
@@ -110,8 +118,8 @@ export default function DashboardPage() {
             ),
           },
           {
-            label: "Critical Findings",
-            value: "0",
+            label: "At-Risk Scans",
+            value: loading ? "..." : String(atRiskScans),
             icon: (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -147,6 +155,38 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {trendData.length >= 2 && (
+        <div className="card-base p-6">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            Score Trend
+          </h2>
+          <div className="mt-4 h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: "var(--accent)" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Recent scans */}
       <div>
@@ -184,11 +224,11 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)]">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">URL</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Level</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Score</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Date</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">URL</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Level</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Score</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">Date</th>
                 </tr>
               </thead>
               <tbody>

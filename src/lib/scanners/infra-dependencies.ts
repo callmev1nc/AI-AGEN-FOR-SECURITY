@@ -1,4 +1,5 @@
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 const CVE_PATTERNS: Array<{
   name: string;
@@ -90,7 +91,9 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
         const parsed = JSON.parse(content);
         const allDeps = { ...parsed.dependencies, ...parsed.devDependencies };
         for (const [pkg, ver] of Object.entries(allDeps)) {
-          const cleanVer = String(ver).replace(/^[\^~>=<]/, "");
+          // Strip the full leading range prefix (^, ~, >=, <=, >, <, =, v)
+          // so ">=3.0.0"/"^1.2.3"/"~2.1.0" all reduce to comparable digits.
+          const cleanVer = String(ver).replace(/^[^\d]+/, "");
           for (const cve of CVE_PATTERNS) {
             if (pkg === cve.package && cve.versionRange(cleanVer)) {
               const existing = findings.find((f) => f.title.includes(cve.name));
@@ -120,14 +123,13 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 };
 
 async function fetchUrl(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
-    if (response.ok) {
-      return response.text();
-    }
-  } catch {
-    // cannot reach URL
-  }
+  const res = await scannerRequest(url, {
+    method: "GET",
+    followRedirects: true,
+    timeoutMs: 10000,
+  });
+  if (!res) return null;
+  if (res.statusCode >= 200 && res.statusCode < 300) return res.body;
   return null;
 }
 

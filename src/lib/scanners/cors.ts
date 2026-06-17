@@ -1,6 +1,5 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Test CORS configuration by sending OPTIONS preflight requests with various Origin headers:
@@ -32,7 +31,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     const resp = await sendOptions(targetUrl, origin);
     if (!resp) continue;
 
-    const headers = resp.headers as unknown as Record<string, string | string[] | undefined>;
+    const headers = resp;
     const acao = headers["access-control-allow-origin"];
     const acac = headers["access-control-allow-credentials"];
 
@@ -101,7 +100,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
   if (!hasWildcardWithCredentials) {
     const defaultResp = await sendOptions(targetUrl, "https://evil.com");
     if (defaultResp) {
-      const headers = defaultResp as unknown as Record<string, string | string[] | undefined>;
+      const headers = defaultResp;
       const acao = headers["access-control-allow-origin"];
       if (acao === "*") {
         findings.push({
@@ -127,39 +126,19 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 // Helpers
 // ---------------------------------------------------------------------------
 
-function sendOptions(
+async function sendOptions(
   targetUrl: string,
   origin: string
-): Promise<http.IncomingHttpHeaders | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(targetUrl);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "OPTIONS",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        Origin: origin,
-        "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "Content-Type, Authorization",
-        "User-Agent": "SecuPi-Scanner/1.0",
-      },
-      timeout: 8000,
-    };
-
-    const req = lib.request(options, (res) => {
-      resolve(res.headers);
-      res.resume();
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+): Promise<Record<string, string> | null> {
+  const res = await scannerRequest(targetUrl, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "GET",
+      "Access-Control-Request-Headers": "Content-Type, Authorization",
+    },
+    followRedirects: false,
+    timeoutMs: 8000,
   });
+  return res ? res.headers : null;
 }

@@ -1,5 +1,6 @@
 import * as tls from "tls";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { resolveAndAssertPublic } from "@/lib/safe-fetch";
 
 /**
  * Check SSL/TLS configuration:
@@ -19,8 +20,19 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     return findings;
   }
 
-  const certResult = await checkCertificate(hostname, port);
-  const protocolResult = await checkProtocols(hostname, port);
+  // SSRF guard: resolve the hostname and assert it is public-routable, then
+  // connect to the validated IP (keeping `hostname` for SNI) so a private /
+  // metadata target can't be probed and DNS-rebinding can't slip through.
+  let resolvedIp: string;
+  try {
+    const ips = await resolveAndAssertPublic(hostname);
+    resolvedIp = ips[0];
+  } catch {
+    return findings;
+  }
+
+  const certResult = await checkCertificate(resolvedIp, hostname, port);
+  const protocolResult = await checkProtocols(resolvedIp, hostname, port);
 
   if (certResult) {
     // --- Certificate expiry ---
@@ -154,10 +166,10 @@ interface ProtocolInfo {
   currentCipher?: { name: string };
 }
 
-function checkCertificate(hostname: string, port: number): Promise<CertInfo | null> {
+function checkCertificate(ip: string, servername: string, port: number): Promise<CertInfo | null> {
   return new Promise((resolve) => {
     const socket = tls.connect(
-      { host: hostname, port, servername: hostname, rejectUnauthorized: false },
+      { host: ip, port, servername, rejectUnauthorized: false },
       () => {
         const cert = socket.getPeerCertificate();
         socket.end();
@@ -182,10 +194,10 @@ function checkCertificate(hostname: string, port: number): Promise<CertInfo | nu
   });
 }
 
-function checkProtocols(hostname: string, port: number): Promise<ProtocolInfo | null> {
+function checkProtocols(ip: string, servername: string, port: number): Promise<ProtocolInfo | null> {
   return new Promise((resolve) => {
     const socket = tls.connect(
-      { host: hostname, port, servername: hostname, rejectUnauthorized: false },
+      { host: ip, port, servername, rejectUnauthorized: false },
       () => {
         const protocol = socket.getProtocol();
         const cipher = socket.getCipher();

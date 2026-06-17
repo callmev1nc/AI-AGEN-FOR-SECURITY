@@ -1,7 +1,5 @@
-import * as http from "http";
-import * as https from "https";
-import { URL } from "url";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { fetchFull } from "./http";
 
 /**
  * Advanced cookie analysis:
@@ -18,7 +16,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
   const initialResp = await httpGetFull(targetUrl);
   if (!initialResp) return findings;
 
-  const initialCookies = parseCookies((initialResp.headers["set-cookie"] as string[] | undefined) || []);  const parsed = new URL(targetUrl);
+  const initialCookies = parseCookies(initialResp.setCookie);  const parsed = new URL(targetUrl);
   const hostname = parsed.hostname;
 
   // ---- 2. Check for session fixation via URL parameters ----
@@ -29,7 +27,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     if (fixationResp) {
       const body = fixationResp.body || "";
       // Check if the value appears in a Set-Cookie header
-      const fixationCookies = parseCookies((fixationResp.headers["set-cookie"] as string[] | undefined) || []);
+      const fixationCookies = parseCookies(fixationResp.setCookie);
       const hasFixedSession = fixationCookies.some(
         (c) => c.value === "secupi-fixation-test-12345"
       );
@@ -143,7 +141,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     const httpUrl = targetUrl.replace("https://", "http://");
     const httpResp = await httpGetFull(httpUrl);
     if (httpResp) {
-      const httpCookies = parseCookies((httpResp.headers["set-cookie"] as string[] | undefined) || []);
+      const httpCookies = parseCookies(httpResp.setCookie);
       for (const cookie of httpCookies) {
         if (!cookie.secure) {
           const isSessionCookie = /sess|sid|token|auth|login/i.test(cookie.name);
@@ -186,8 +184,9 @@ interface CookieInfo {
 
 interface FullResponse {
   statusCode: number;
-  headers: http.IncomingHttpHeaders;
-  body: string | null;
+  headers: Record<string, string>;
+  body: string;
+  setCookie: string[];
 }
 
 function parseCookies(setCookieHeaders: string[]): CookieInfo[] {
@@ -224,45 +223,17 @@ function parseCookies(setCookieHeaders: string[]): CookieInfo[] {
   });
 }
 
-function httpGetFull(url: string): Promise<FullResponse | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(url);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      timeout: 10000,
-      rejectUnauthorized: false,
-    };
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer | string) => {
-        if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-        else chunks.push(chunk);
-      });
-      res.on("end", () => {
-        resolve({
-          statusCode: res.statusCode || 0,
-          headers: res.headers,
-          body: Buffer.concat(chunks).toString("utf8"),
-        });
-      });
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+async function httpGetFull(url: string): Promise<FullResponse | null> {
+  const res = await fetchFull(url, {
+    headers: { Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+    followRedirects: false,
+    timeoutMs: 10000,
   });
+  if (!res) return null;
+  return {
+    statusCode: res.statusCode,
+    headers: res.headers,
+    body: res.body,
+    setCookie: res.setCookie,
+  };
 }

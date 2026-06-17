@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 import type { VulnerabilityResult, Severity, ScannerEntry } from "@/lib/scanners/types";
 import { logger } from "@/lib/logger";
+import pLimit from "p-limit";
 
 import { scan as scanHeaders } from "@/lib/scanners/headers";
 import { scan as scanSsl } from "@/lib/scanners/ssl";
@@ -66,6 +68,34 @@ export function calculateScore(findings: VulnerabilityResult[]): number {
     score -= SEVERITY_DEDUCTIONS[finding.severity];
   }
   return Math.max(0, Math.min(100, score));
+}
+
+/**
+ * De-duplicate findings produced across scanners. Conservative: only merges
+ * EXACT duplicates (same category + affectedUrl + title), keeping the highest
+ * severity. We deliberately do NOT merge across different parameters/paths —
+ * those are distinct injection points and merging would hide real vulns.
+ */
+const SEVERITY_RANK: Record<Severity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+  info: 4,
+};
+export function dedupeFindings(findings: VulnerabilityResult[]): VulnerabilityResult[] {
+  const map = new Map<string, VulnerabilityResult>();
+  for (const finding of findings) {
+    const key = `${finding.category}${finding.affectedUrl}${finding.title}`;
+    const existing = map.get(key);
+    if (
+      !existing ||
+      (SEVERITY_RANK[finding.severity] ?? 9) < (SEVERITY_RANK[existing.severity] ?? 9)
+    ) {
+      map.set(key, finding);
+    }
+  }
+  return [...map.values()];
 }
 
 export function formatDuration(ms: number): string {
@@ -139,30 +169,43 @@ export async function runScanInline(params: {
     }
   }
 
+  // Cap concurrent scanners so a "deep" scan (13+ modules, each making many
+  // outbound requests) doesn't exhaust sockets or hammer the target.
+  const limit = pLimit(5);
   const results = await Promise.allSettled(
-    activeModules.map(async (module) => {
-      try {
-        logger.info("ScanRunner", `Running scanner: ${module.name}`);
-        const moduleStart = Date.now();
-        const findings = await module.scan(targetUrl);
-        const elapsed = Date.now() - moduleStart;
-        logger.info("ScanRunner", `${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
-        await updateProgress(module.name);
-        return findings;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        logger.error("ScanRunner", `Scanner "${module.name}" failed: ${message}`);
-        await updateProgress(module.name, message);
-        return [] as VulnerabilityResult[];
-      }
-    })
+    activeModules.map((module) =>
+      limit(async () => {
+        try {
+          logger.info("ScanRunner", `Running scanner: ${module.name}`);
+          const moduleStart = Date.now();
+          const findings = await module.scan(targetUrl);
+          const elapsed = Date.now() - moduleStart;
+          logger.info("ScanRunner", `${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
+          await updateProgress(module.name);
+          return findings;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          logger.error("ScanRunner", `Scanner "${module.name}" failed: ${message}`);
+          await updateProgress(module.name, message);
+          return [] as VulnerabilityResult[];
+        }
+      })
+    )
   );
 
-  const allFindings: VulnerabilityResult[] = [];
+  const rawFindings: VulnerabilityResult[] = [];
   for (const result of results) {
     if (result.status === "fulfilled") {
-      allFindings.push(...result.value);
+      rawFindings.push(...result.value);
     }
+  }
+
+  const allFindings = dedupeFindings(rawFindings);
+  if (rawFindings.length !== allFindings.length) {
+    logger.info(
+      "ScanRunner",
+      `Deduplicated ${rawFindings.length} -> ${allFindings.length} findings`
+    );
   }
 
   const overallScore = calculateScore(allFindings);
@@ -180,6 +223,9 @@ export async function runScanInline(params: {
       remediation: f.remediation,
       cvssScore: f.cvssScore || null,
       affectedUrl: f.affectedUrl,
+      // Stable hash (category|url|title) enables cross-scan dedup +
+      // ai_triage_cache lookups (see supabase-migration-wave1.sql).
+      findingHash: createHash("sha256").update(`${f.category}|${f.affectedUrl}|${f.title}`).digest("hex"),
       suggestedFix: f.suggestedFix ?? null,
       filePath: f.filePath ?? null,
       lineStart: f.lineStart ?? null,

@@ -1,7 +1,6 @@
-import * as http from "http";
-import * as https from "https";
 import type { ScannerModule, VulnerabilityResult } from "./types";
 import { getHeader } from "./types";
+import { scannerRequest } from "./http";
 
 /**
  * Check for information disclosure:
@@ -160,51 +159,19 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 
 interface HttpResponse {
   statusCode: number;
-  headers: http.IncomingHttpHeaders;
+  headers: Record<string, string>;
   body: string | null;
 }
 
-function httpGet(url: string): Promise<HttpResponse | null> {
-  return new Promise((resolve) => {
-    const parsed = new URL(url);
-    const lib = parsed.protocol === "https:" ? https : http;
-
-    const options: https.RequestOptions = {
-      method: "GET",
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: {
-        "User-Agent": "SecuPi-Scanner/1.0",
-        Accept: "*/*",
-      },
-      timeout: 8000,
-    };
-
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer | string) => {
-        if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
-        else chunks.push(chunk);
-      });
-      res.on("end", () => {
-        const body = Buffer.concat(chunks).toString("utf8");
-        resolve({
-          statusCode: res.statusCode || 0,
-          headers: res.headers,
-          body,
-        });
-      });
-    });
-
-    req.on("error", () => resolve(null));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve(null);
-    });
-
-    req.end();
+async function httpGet(url: string): Promise<HttpResponse | null> {
+  const res = await scannerRequest(url, {
+    method: "GET",
+    headers: { Accept: "*/*" },
+    followRedirects: false,
+    timeoutMs: 8000,
   });
+  if (!res) return null;
+  return { statusCode: res.statusCode, headers: res.headers, body: res.body };
 }
 
 function hasVersionInfo(serverHeader: string): boolean {

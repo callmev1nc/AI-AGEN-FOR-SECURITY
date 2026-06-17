@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "@/lib/trpc";
+import { createTRPCRouter, protectedProcedure, internalError } from "@/lib/trpc";
 import { answerSecurityQuestion } from "@/server/services/rag-pipeline";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -37,7 +37,7 @@ export const chatRouter = createTRPCRouter({
         .limit(50);
 
       if (error) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+        throw internalError("ChatRouter", error);
       }
 
       return data;

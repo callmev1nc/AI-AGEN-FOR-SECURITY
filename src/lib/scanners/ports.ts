@@ -1,5 +1,6 @@
 import * as net from "net";
 import type { ScannerModule, VulnerabilityResult } from "./types";
+import { resolveAndAssertPublic } from "@/lib/safe-fetch";
 
 /**
  * TCP connect scan on common ports.
@@ -68,6 +69,15 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
   const parsed = new URL(targetUrl);
   const hostname = parsed.hostname;
 
+  // SSRF guard: resolve once and probe the validated public IP only.
+  let target: string;
+  try {
+    const ips = await resolveAndAssertPublic(hostname);
+    target = ips[0];
+  } catch {
+    return findings;
+  }
+
   // Scan all ports concurrently with controlled concurrency
   const concurrency = 50;
   const results: Array<{ port: PortEntry; open: boolean }> = [];
@@ -76,7 +86,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
     const batch = ALL_PORTS.slice(i, i + concurrency);
     const batchResults = await Promise.all(
       batch.map(async (port) => {
-        const open = await probePort(hostname, port.port);
+        const open = await probePort(target, port.port);
         return { port, open };
       })
     );

@@ -15,6 +15,7 @@ type Vulnerability = {
   evidence: string | null;
   remediation: string;
   affectedUrl: string;
+  cvssScore?: number | null;
 };
 
 type Scan = {
@@ -22,6 +23,7 @@ type Scan = {
   targetUrl: string;
   status: string;
   scanLevel: string;
+  scanType: string;
   overallScore: number | null;
   progressPercent: number | null;
   currentModule: string | null;
@@ -59,6 +61,78 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}m ${s}s`;
+}
+
+function downloadBlob(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportScanJson(scan: Scan) {
+  const payload = {
+    scan: {
+      id: scan.id,
+      targetUrl: scan.targetUrl,
+      scanType: scan.scanType,
+      scanLevel: scan.scanLevel,
+      overallScore: scan.overallScore,
+      createdAt: scan.createdAt,
+    },
+    vulnerabilities: scan.vulnerabilities ?? [],
+    exportedAt: new Date().toISOString(),
+  };
+  downloadBlob(`scan-${scan.id}.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+function exportScanCsv(scan: Scan) {
+  const header = ["severity", "category", "title", "affectedUrl", "cvssScore", "description", "remediation"];
+  const esc = (v: unknown) =>
+    `"${String(v ?? "").replace(/"/g, '""').replace(/[\r\n]+/g, " ")}"`;
+  const rows = [header.map(esc).join(",")];
+  for (const v of scan.vulnerabilities ?? []) {
+    rows.push(
+      [v.severity, v.category, v.title, v.affectedUrl, v.cvssScore ?? "", v.description, v.remediation]
+        .map(esc)
+        .join(",")
+    );
+  }
+  downloadBlob(`scan-${scan.id}.csv`, rows.join("\n"), "text/csv");
+}
+
+function sarifLevel(severity: string): "error" | "warning" | "note" {
+  if (severity === "critical" || severity === "high") return "error";
+  if (severity === "medium") return "warning";
+  return "note";
+}
+
+function exportScanSarif(scan: Scan) {
+  const sarif = {
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    version: "2.1.0",
+    runs: [
+      {
+        tool: {
+          driver: { name: "SecureScan", informationUri: "https://securescan.app" },
+        },
+        results: (scan.vulnerabilities ?? []).map((v) => ({
+          ruleId: v.category,
+          level: sarifLevel(v.severity),
+          message: { text: `${v.title} — ${v.description}` },
+          locations: [
+            { physicalLocation: { artifactLocation: { uri: v.affectedUrl } } },
+          ],
+        })),
+      },
+    ],
+  };
+  downloadBlob(`scan-${scan.id}.sarif`, JSON.stringify(sarif, null, 2), "application/json");
 }
 
 function ScanProgress({ scan }: { scan: Scan }) {
@@ -153,6 +227,14 @@ export default function ScanResultsPage() {
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [aiReportError, setAiReportError] = useState("");
   const triggerSent = useRef(false);
+  const [sevFilter, setSevFilter] = useState<string>("all");
+  const [diff, setDiff] = useState<{
+    hasBaseline: boolean;
+    baselineCreatedAt?: string;
+    addedCount?: number;
+    resolvedCount?: number;
+    persistedCount?: number;
+  } | null>(null);
 
   useEffect(() => {
     trpcClient.scan.byId.query({ id: scanId })
@@ -189,6 +271,16 @@ export default function ScanResultsPage() {
     return () => clearInterval(interval);
   }, [scan, scanId]);
 
+  useEffect(() => {
+    if (!scan || scan.status !== "completed") return;
+    trpcClient.scan.diff
+      .query({ scanId })
+      .then(setDiff)
+      .catch(() => {
+        /* differential is best-effort; never block the page */
+      });
+  }, [scan, scanId]);
+
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -218,6 +310,7 @@ export default function ScanResultsPage() {
   }
 
   const vulns = scan.vulnerabilities || [];
+  const filteredVulns = sevFilter === "all" ? vulns : vulns.filter((v) => v.severity === sevFilter);
   const score = scan.overallScore ?? 0;
   const scoreColor = getScoreColor(score);
 
@@ -274,6 +367,24 @@ export default function ScanResultsPage() {
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
           >
             {exporting ? "Exporting..." : "Export PDF"}
+          </button>
+          <button
+            onClick={() => exportScanJson(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={() => exportScanCsv(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={() => exportScanSarif(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export SARIF
           </button>
           <button
             onClick={async () => {
@@ -340,6 +451,18 @@ export default function ScanResultsPage() {
         </div>
       </div>
 
+      {diff?.hasBaseline && (
+        <div className="card-base flex flex-wrap items-center gap-x-8 gap-y-2 p-5">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            vs previous scan
+            {diff.baselineCreatedAt ? ` (${new Date(diff.baselineCreatedAt).toLocaleDateString()})` : ""}
+          </p>
+          <span className="text-sm font-semibold text-[var(--critical)]">+{diff.addedCount} new</span>
+          <span className="text-sm font-semibold text-[var(--accent)]">&minus;{diff.resolvedCount} resolved</span>
+          <span className="text-sm text-[var(--text-muted)]">{diff.persistedCount} unchanged</span>
+        </div>
+      )}
+
       {vulns.length === 0 ? (
         <div className="card-base flex items-center justify-center py-12 text-[var(--text-muted)]">
           <div className="text-center">
@@ -349,11 +472,33 @@ export default function ScanResultsPage() {
         </div>
       ) : (
         <div>
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
-            Vulnerability Findings ({vulns.length})
-          </h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
+              Vulnerability Findings ({filteredVulns.length}{sevFilter !== "all" ? ` of ${vulns.length}` : ""})
+            </h2>
+            <div className="flex flex-wrap gap-1.5">
+              {["all", "critical", "high", "medium", "low", "info"].map((sev) => (
+                <button
+                  key={sev}
+                  onClick={() => setSevFilter(sev)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider transition-colors ${
+                    sevFilter === sev
+                      ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                      : "border border-[var(--border)] text-[var(--text-muted)] hover:text-white"
+                  }`}
+                >
+                  {sev === "all" ? "All" : sev}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-3">
-            {vulns.map((vuln) => {
+            {filteredVulns.length === 0 && (
+              <p className="card-base px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+                No findings match this filter.
+              </p>
+            )}
+            {filteredVulns.map((vuln) => {
               const colors = getSeverityColor(vuln.severity);
               return (
                 <details key={vuln.id} className="card-base group cursor-pointer">
