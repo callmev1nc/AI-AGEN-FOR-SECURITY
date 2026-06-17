@@ -6,6 +6,7 @@ import { resolveAndAssertPublic } from "@/lib/safe-fetch";
 import { diffFindings, type FindingLike } from "@/lib/scan-diff";
 import { generatePdfReport } from "@/server/services/report";
 import { generateAiReport } from "@/server/services/ai-report-writer";
+import { generateExploitChain } from "@/server/services/exploit-chain";
 
 /** Severity display order (critical first). Postgres text-enum ordering is
  *  alphabetical, which puts "info" before "low" before "medium", so we sort
@@ -80,6 +81,11 @@ export const scanRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const result = await generateAiReport(input.id, ctx.user.id);
       return result;
+    }),
+  generateExploitChain: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return generateExploitChain(input.id, ctx.user.id);
     }),
   create: protectedProcedure
     .input(

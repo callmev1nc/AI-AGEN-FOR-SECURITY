@@ -135,6 +135,23 @@ function exportScanSarif(scan: Scan) {
   downloadBlob(`scan-${scan.id}.sarif`, JSON.stringify(sarif, null, 2), "application/json");
 }
 
+function MarkdownBlock({ content }: { content: string }) {
+  return (
+    <div className="prose prose-invert prose-sm max-w-none">
+      {content.split("\n").map((line, i) => {
+        if (line.startsWith("# ")) return <h1 key={i} className="text-lg font-bold mt-4 mb-2">{line.slice(2)}</h1>;
+        if (line.startsWith("## ")) return <h2 key={i} className="text-base font-bold mt-3 mb-1">{line.slice(3)}</h2>;
+        if (line.startsWith("### ")) return <h3 key={i} className="text-sm font-bold mt-2 mb-1">{line.slice(4)}</h3>;
+        if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold text-[var(--text-secondary)] mt-2">{line.slice(2, -2)}</p>;
+        if (line.trim() === "") return <div key={i} className="h-2" />;
+        if (line.startsWith("- ")) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-disc">{line.slice(2)}</li>;
+        if (/^\d+\. /.test(line)) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-decimal">{line.slice(line.indexOf(".") + 2)}</li>;
+        return <p key={i} className="text-sm text-[var(--text-secondary)]">{line}</p>;
+      })}
+    </div>
+  );
+}
+
 function ScanProgress({ scan }: { scan: Scan }) {
   const percent = scan.progressPercent ?? 0;
   const done = scan.modulesCompleted ?? 0;
@@ -226,6 +243,9 @@ export default function ScanResultsPage() {
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [aiReportError, setAiReportError] = useState("");
+  const [exploitChain, setExploitChain] = useState<string | null>(null);
+  const [exploitChainLoading, setExploitChainLoading] = useState(false);
+  const [exploitChainError, setExploitChainError] = useState("");
   const triggerSent = useRef(false);
   const [sevFilter, setSevFilter] = useState<string>("all");
   const [diff, setDiff] = useState<{
@@ -404,6 +424,24 @@ export default function ScanResultsPage() {
           >
             {aiReportLoading ? "Generating..." : "Generate AI Report"}
           </button>
+          <button
+            onClick={async () => {
+              setExploitChainLoading(true);
+              setExploitChainError("");
+              try {
+                const result = await trpcClient.scan.generateExploitChain.mutate({ id: scanId });
+                setExploitChain(result.content);
+              } catch (err) {
+                setExploitChainError(err instanceof Error ? err.message : "Failed to generate exploit-chain analysis");
+              } finally {
+                setExploitChainLoading(false);
+              }
+            }}
+            disabled={exploitChainLoading}
+            className="rounded-lg border border-[var(--critical-dim)] px-4 py-2 text-sm text-[var(--critical)] transition-colors hover:bg-[var(--critical-dim)] disabled:opacity-50"
+          >
+            {exploitChainLoading ? "Analyzing..." : "Exploit-Chain Analysis"}
+          </button>
           <Link href="/dashboard/scans/new" className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-all hover:brightness-110">New Scan</Link>
         </div>
       </div>
@@ -569,20 +607,26 @@ export default function ScanResultsPage() {
             {aiReportError && (
               <p className="text-sm text-[var(--critical)]">{aiReportError}</p>
             )}
-            {aiReport && (
-              <div className="prose prose-invert prose-sm max-w-none">
-                {aiReport.split("\n").map((line, i) => {
-                  if (line.startsWith("# ")) return <h1 key={i} className="text-lg font-bold mt-4 mb-2">{line.slice(2)}</h1>;
-                  if (line.startsWith("## ")) return <h2 key={i} className="text-base font-bold mt-3 mb-1">{line.slice(3)}</h2>;
-                  if (line.startsWith("### ")) return <h3 key={i} className="text-sm font-bold mt-2 mb-1">{line.slice(4)}</h3>;
-                  if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold text-[var(--text-secondary)] mt-2">{line.slice(2, -2)}</p>;
-                  if (line.trim() === "") return <div key={i} className="h-2" />;
-                  if (line.startsWith("- ")) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-disc">{line.slice(2)}</li>;
-                  if (line.startsWith("1. ") || line.startsWith("2. ") || line.startsWith("3. ") || line.startsWith("4. ") || line.startsWith("5. ") || line.startsWith("6. ")) return <li key={i} className="text-sm text-[var(--text-secondary)] ml-4 list-decimal">{line.slice(3)}</li>;
-                  return <p key={i} className="text-sm text-[var(--text-secondary)]">{line}</p>;
-                })}
-              </div>
+            {aiReport && <MarkdownBlock content={aiReport} />}
+          </div>
+        </div>
+      )}
+
+      {(exploitChain || exploitChainError) && (
+        <div className="card-base overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
+              Exploit-Chain Analysis
+            </h2>
+            {exploitChain && (
+              <button onClick={() => setExploitChain(null)} className="text-xs text-[var(--text-muted)] hover:text-white transition-colors">
+                Close
+              </button>
             )}
+          </div>
+          <div className="p-4">
+            {exploitChainError && <p className="text-sm text-[var(--critical)]">{exploitChainError}</p>}
+            {exploitChain && <MarkdownBlock content={exploitChain} />}
           </div>
         </div>
       )}
