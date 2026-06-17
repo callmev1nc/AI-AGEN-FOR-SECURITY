@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import ToolPageShell from "@/components/tools/ToolPageShell";
 import ToolInputForm from "@/components/tools/ToolInputForm";
-import ToolResultsDisplay, { ScoreGauge } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { ScoreGauge, ToolError } from "@/components/tools/ToolResultsDisplay";
+import { useToolPage } from "@/components/tools/useToolPage";
 import { trpcClient } from "@/lib/trpc-client";
 
 interface PhishingResult {
@@ -15,23 +15,9 @@ interface PhishingResult {
 }
 
 export default function PhishingAnalyzerPage() {
-  const [result, setResult] = useState<PhishingResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(emailText: string) {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const data = await trpcClient.tools.phishingAnalyzer.mutate({ emailText });
-      setResult(data as PhishingResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Analysis failed");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { result, loading, error, submit } = useToolPage<PhishingResult>((emailText) =>
+    trpcClient.tools.phishingAnalyzer.mutate({ emailText })
+  );
 
   const verdictColors: Record<string, string> = {
     Safe: "var(--accent)",
@@ -46,18 +32,14 @@ export default function PhishingAnalyzerPage() {
       description="Paste an email to analyze it for phishing indicators, get a risk score, and detailed AI-powered verdict."
     >
       <ToolInputForm
-        onSubmit={handleSubmit}
+        onSubmit={submit}
         placeholder="Paste the full email content here (headers + body)..."
         buttonLabel="Analyze Email"
         loading={loading}
         rows={10}
       />
 
-      {error && (
-        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
-          {error}
-        </div>
-      )}
+      <ToolError error={error} />
 
       {result && (
         <ToolResultsDisplay>

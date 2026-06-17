@@ -18,6 +18,16 @@ export default function ToolResultsDisplay({ children, title = "Results" }: Tool
   );
 }
 
+/** Shared error banner used by every tool page. Renders nothing when empty. */
+export function ToolError({ error }: { error: string }) {
+  if (!error) return null;
+  return (
+    <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
+      {error}
+    </div>
+  );
+}
+
 export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 

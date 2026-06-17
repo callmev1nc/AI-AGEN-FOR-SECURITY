@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import ToolPageShell from "@/components/tools/ToolPageShell";
 import ToolInputForm from "@/components/tools/ToolInputForm";
-import ToolResultsDisplay, { ScoreGauge } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { ScoreGauge, ToolError } from "@/components/tools/ToolResultsDisplay";
+import { useToolPage } from "@/components/tools/useToolPage";
 import { trpcClient } from "@/lib/trpc-client";
 
 interface PolicyIssue {
@@ -22,23 +22,9 @@ interface PasswordPolicyResult {
 }
 
 export default function PasswordAuditorPage() {
-  const [result, setResult] = useState<PasswordPolicyResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handleSubmit(policyText: string) {
-    setLoading(true);
-    setError("");
-    setResult(null);
-    try {
-      const data = await trpcClient.tools.passwordAuditor.mutate({ policyText });
-      setResult(data as PasswordPolicyResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Audit failed");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { result, loading, error, submit } = useToolPage<PasswordPolicyResult>((policyText) =>
+    trpcClient.tools.passwordAuditor.mutate({ policyText })
+  );
 
   const severityColors: Record<string, string> = {
     critical: "var(--critical)",
@@ -54,18 +40,14 @@ export default function PasswordAuditorPage() {
       description="Paste your organization's password policy to audit it against NIST SP 800-63B guidelines and get a compliance score."
     >
       <ToolInputForm
-        onSubmit={handleSubmit}
+        onSubmit={submit}
         placeholder={`Paste your password policy text here...\n\nExample:\n- Passwords must be at least 12 characters\n- Must contain uppercase, lowercase, number, and special character\n- Passwords expire every 90 days\n- Cannot reuse last 5 passwords`}
         buttonLabel="Audit Policy"
         loading={loading}
         rows={8}
       />
 
-      {error && (
-        <div className="rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 px-4 py-3 text-sm text-[#ef4444]">
-          {error}
-        </div>
-      )}
+      <ToolError error={error} />
 
       {result && (
         <ToolResultsDisplay>
