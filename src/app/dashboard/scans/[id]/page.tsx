@@ -227,6 +227,7 @@ export default function ScanResultsPage() {
   const [aiReportLoading, setAiReportLoading] = useState(false);
   const [aiReportError, setAiReportError] = useState("");
   const triggerSent = useRef(false);
+  const [sevFilter, setSevFilter] = useState<string>("all");
 
   useEffect(() => {
     trpcClient.scan.byId.query({ id: scanId })
@@ -292,6 +293,7 @@ export default function ScanResultsPage() {
   }
 
   const vulns = scan.vulnerabilities || [];
+  const filteredVulns = sevFilter === "all" ? vulns : vulns.filter((v) => v.severity === sevFilter);
   const score = scan.overallScore ?? 0;
   const scoreColor = getScoreColor(score);
 
@@ -441,11 +443,33 @@ export default function ScanResultsPage() {
         </div>
       ) : (
         <div>
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
-            Vulnerability Findings ({vulns.length})
-          </h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]" style={{ fontFamily: "var(--font-jetbrains)" }}>
+              Vulnerability Findings ({filteredVulns.length}{sevFilter !== "all" ? ` of ${vulns.length}` : ""})
+            </h2>
+            <div className="flex flex-wrap gap-1.5">
+              {["all", "critical", "high", "medium", "low", "info"].map((sev) => (
+                <button
+                  key={sev}
+                  onClick={() => setSevFilter(sev)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider transition-colors ${
+                    sevFilter === sev
+                      ? "bg-[var(--accent-dim)] text-[var(--accent)]"
+                      : "border border-[var(--border)] text-[var(--text-muted)] hover:text-white"
+                  }`}
+                >
+                  {sev === "all" ? "All" : sev}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="space-y-3">
-            {vulns.map((vuln) => {
+            {filteredVulns.length === 0 && (
+              <p className="card-base px-4 py-6 text-center text-sm text-[var(--text-muted)]">
+                No findings match this filter.
+              </p>
+            )}
+            {filteredVulns.map((vuln) => {
               const colors = getSeverityColor(vuln.severity);
               return (
                 <details key={vuln.id} className="card-base group cursor-pointer">
