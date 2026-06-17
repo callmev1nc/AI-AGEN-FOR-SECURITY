@@ -15,6 +15,7 @@ type Vulnerability = {
   evidence: string | null;
   remediation: string;
   affectedUrl: string;
+  cvssScore?: number | null;
 };
 
 type Scan = {
@@ -22,6 +23,7 @@ type Scan = {
   targetUrl: string;
   status: string;
   scanLevel: string;
+  scanType: string;
   overallScore: number | null;
   progressPercent: number | null;
   currentModule: string | null;
@@ -59,6 +61,49 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
   return `${m}m ${s}s`;
+}
+
+function downloadBlob(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportScanJson(scan: Scan) {
+  const payload = {
+    scan: {
+      id: scan.id,
+      targetUrl: scan.targetUrl,
+      scanType: scan.scanType,
+      scanLevel: scan.scanLevel,
+      overallScore: scan.overallScore,
+      createdAt: scan.createdAt,
+    },
+    vulnerabilities: scan.vulnerabilities ?? [],
+    exportedAt: new Date().toISOString(),
+  };
+  downloadBlob(`scan-${scan.id}.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+function exportScanCsv(scan: Scan) {
+  const header = ["severity", "category", "title", "affectedUrl", "cvssScore", "description", "remediation"];
+  const esc = (v: unknown) =>
+    `"${String(v ?? "").replace(/"/g, '""').replace(/[\r\n]+/g, " ")}"`;
+  const rows = [header.map(esc).join(",")];
+  for (const v of scan.vulnerabilities ?? []) {
+    rows.push(
+      [v.severity, v.category, v.title, v.affectedUrl, v.cvssScore ?? "", v.description, v.remediation]
+        .map(esc)
+        .join(",")
+    );
+  }
+  downloadBlob(`scan-${scan.id}.csv`, rows.join("\n"), "text/csv");
 }
 
 function ScanProgress({ scan }: { scan: Scan }) {
@@ -274,6 +319,18 @@ export default function ScanResultsPage() {
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
           >
             {exporting ? "Exporting..." : "Export PDF"}
+          </button>
+          <button
+            onClick={() => exportScanJson(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={() => exportScanCsv(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export CSV
           </button>
           <button
             onClick={async () => {

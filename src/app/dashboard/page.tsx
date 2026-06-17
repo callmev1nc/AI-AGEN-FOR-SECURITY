@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trpcClient } from "@/lib/trpc-client";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 type Scan = {
   id: string;
@@ -55,6 +56,12 @@ export default function DashboardPage() {
         )
       : null;
   const atRiskScans = completedScans.filter((s) => (s.overallScore ?? 100) < 50).length;
+  const trendData = [...completedScans]
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map((s) => ({
+      date: new Date(s.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      score: s.overallScore ?? 0,
+    }));
   const lastScan = scans.length > 0 ? scans[0] : null;
 
   return (
@@ -148,6 +155,38 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {trendData.length >= 2 && (
+        <div className="card-base p-6">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
+            Score Trend
+          </h2>
+          <div className="mt-4 h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="date" stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} stroke="var(--text-muted)" tick={{ fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: "var(--accent)" }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Recent scans */}
       <div>
