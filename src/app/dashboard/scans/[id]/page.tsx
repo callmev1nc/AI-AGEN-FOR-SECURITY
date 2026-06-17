@@ -106,6 +106,35 @@ function exportScanCsv(scan: Scan) {
   downloadBlob(`scan-${scan.id}.csv`, rows.join("\n"), "text/csv");
 }
 
+function sarifLevel(severity: string): "error" | "warning" | "note" {
+  if (severity === "critical" || severity === "high") return "error";
+  if (severity === "medium") return "warning";
+  return "note";
+}
+
+function exportScanSarif(scan: Scan) {
+  const sarif = {
+    $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+    version: "2.1.0",
+    runs: [
+      {
+        tool: {
+          driver: { name: "SecureScan", informationUri: "https://securescan.app" },
+        },
+        results: (scan.vulnerabilities ?? []).map((v) => ({
+          ruleId: v.category,
+          level: sarifLevel(v.severity),
+          message: { text: `${v.title} — ${v.description}` },
+          locations: [
+            { physicalLocation: { artifactLocation: { uri: v.affectedUrl } } },
+          ],
+        })),
+      },
+    ],
+  };
+  downloadBlob(`scan-${scan.id}.sarif`, JSON.stringify(sarif, null, 2), "application/json");
+}
+
 function ScanProgress({ scan }: { scan: Scan }) {
   const percent = scan.progressPercent ?? 0;
   const done = scan.modulesCompleted ?? 0;
@@ -331,6 +360,12 @@ export default function ScanResultsPage() {
             className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
           >
             Export CSV
+          </button>
+          <button
+            onClick={() => exportScanSarif(scan)}
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+          >
+            Export SARIF
           </button>
           <button
             onClick={async () => {
