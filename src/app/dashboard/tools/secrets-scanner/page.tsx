@@ -2,7 +2,7 @@
 
 import ToolPageShell from "@/components/tools/ToolPageShell";
 import ToolInputForm from "@/components/tools/ToolInputForm";
-import ToolResultsDisplay, { CopyButton, ToolError } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { ToolError } from "@/components/tools/ToolResultsDisplay";
 import { useToolPage } from "@/components/tools/useToolPage";
 import { trpcClient } from "@/lib/trpc-client";
 

@@ -4,8 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runScanInline } from "@/lib/scan-runner";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { enqueueScan, isEnabled as queueEnabled } from "@/lib/scan-queue";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   let scanId: unknown;
@@ -64,18 +65,37 @@ export async function POST(req: Request) {
     );
   }
 
-  after(async () => {
-    try {
-      await runScanInline({
-        scanId: scan.id,
-        targetUrl: scan.targetUrl,
-        scanLevel: scan.scanLevel,
-        scanType: scan.scanType,
-      });
-    } catch (err) {
-      logger.error("Trigger", `Scan ${scanId} failed: ${err}`);
-    }
-  });
+  const isDeep = scan.scanLevel === "deep";
+
+  // Deep scans route to the background queue (when enabled); quick/standard
+  // run inline via Vercel's after().
+  if (isDeep && queueEnabled) {
+    after(async () => {
+      try {
+        await enqueueScan({
+          scanId: scan.id,
+          targetUrl: scan.targetUrl,
+          scanLevel: scan.scanLevel,
+          scanType: scan.scanType,
+        });
+      } catch (err) {
+        logger.error("Trigger", `Failed to enqueue scan ${scanId}: ${err}`);
+      }
+    });
+  } else {
+    after(async () => {
+      try {
+        await runScanInline({
+          scanId: scan.id,
+          targetUrl: scan.targetUrl,
+          scanLevel: scan.scanLevel,
+          scanType: scan.scanType,
+        });
+      } catch (err) {
+        logger.error("Trigger", `Scan ${scanId} failed: ${err}`);
+      }
+    });
+  }
 
   return Response.json({ success: true, scanId });
 }

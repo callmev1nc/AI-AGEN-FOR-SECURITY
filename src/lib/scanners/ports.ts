@@ -79,7 +79,10 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
   }
 
   // Scan all ports concurrently with controlled concurrency
-  const concurrency = 50;
+  const concurrency = Math.min(
+    Number(process.env.PORT_SCAN_CONCURRENCY) || 100,
+    ALL_PORTS.length
+  );
   const results: Array<{ port: PortEntry; open: boolean }> = [];
 
   for (let i = 0; i < ALL_PORTS.length; i += concurrency) {
@@ -121,7 +124,7 @@ export const scan: ScannerModule = async (targetUrl: string): Promise<Vulnerabil
 function probePort(host: string, port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
-    const timeout = 1500;
+    const timeout = Math.min(Number(process.env.PORT_SCAN_TIMEOUT_MS) || 750, 5000);
 
     socket.setTimeout(timeout);
 

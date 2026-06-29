@@ -160,10 +160,6 @@ export default function RegisterPage() {
               <div className="flex gap-1">
                 {["weak", "medium", "strong"].map((level) => {
                   const strength = getPasswordStrength(password);
-                  const active = strength.level === level ||
-                    (level === "weak" && strength.level === "medium") ||
-                    (level === "weak" && strength.level === "strong") ||
-                    (level === "medium" && strength.level === "strong");
                   const filled = level === "weak" ? strength.score >= 0 : level === "medium" ? strength.score >= 1 : strength.score >= 2;
                   const color =
                     strength.level === "weak"

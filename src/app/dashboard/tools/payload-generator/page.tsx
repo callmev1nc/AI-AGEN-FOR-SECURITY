@@ -18,8 +18,7 @@ interface PayloadGeneratorResult {
   warnings: string[];
 }
 
-const VULN_TYPE = ["sql-injection", "xss", "path-traversal", "command-injection", "nosql-injection", "ldap-injection", "xxe", "ssrf"] as const;
-type VulnType = typeof VULN_TYPE[number];
+type VulnType = "sql-injection" | "xss" | "path-traversal" | "command-injection" | "nosql-injection" | "ldap-injection" | "xxe" | "ssrf";
 
 const VULNERABILITY_OPTIONS: Array<{ value: VulnType; label: string }> = [
   { value: "sql-injection", label: "SQL Injection" },

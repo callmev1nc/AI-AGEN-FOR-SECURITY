@@ -13,15 +13,6 @@ interface VulnerabilityInput {
   affectedUrl: string;
 }
 
-interface ScanInput {
-  id: string;
-  targetUrl: string;
-  scanLevel: string;
-  scanType: string;
-  overallScore: number | null;
-  vulnerabilities: VulnerabilityInput[];
-}
-
 export async function generateAiReport(scanId: string, userId: string) {
   const admin = createAdminClient();
 
@@ -72,7 +63,7 @@ ${scan.vulnerabilities.length === 0 ? "No vulnerabilities were found during this
 
   const reportMarkdown = await callClaude(
     [{ role: "user", content: userPrompt }],
-    { system: systemPrompt, maxTokens: 8192 }
+    { system: { text: systemPrompt, cache: true }, maxTokens: 8192 }
   );
 
   const storagePath = `reports/${userId}/${scanId}-ai-${Date.now()}.md`;

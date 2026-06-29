@@ -60,6 +60,33 @@ describe("callClaude", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("does not retry on non-retryable 4xx (e.g. 400)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 400, text: async () => "bad request" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const p = callClaude([{ role: "user", content: "hi" }], { retries: 2 });
+    p.catch(() => {});
+    await vi.runAllTimersAsync();
+    await expect(p).rejects.toThrow();
+    // Must NOT retry a deterministic client error.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries on 429 (rate limit)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429, text: async () => "slow down" })
+      .mockResolvedValueOnce(okResponse("after-cooldown"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const p = callClaude([{ role: "user", content: "hi" }], { retries: 2 });
+    await vi.runAllTimersAsync();
+    await expect(p).resolves.toBe("after-cooldown");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("joins multi-block content", async () => {
     vi.stubGlobal(
       "fetch",

@@ -24,6 +24,12 @@
  *     probes that must inspect the raw first response.
  */
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import {
+  acquireHostSlot,
+  releaseHostSlot,
+  cacheGet,
+  cacheSet,
+} from "@/lib/scanners/scan-context";
 
 export interface ScannerResponse {
   statusCode: number;
@@ -50,11 +56,37 @@ export interface ScannerRequestOptions {
 /**
  * Core SSRF-safe request. Returns null on block/timeout/network error unless
  * `throwOnBlock` is set.
+ *
+ * Integrates the request-scoped response cache (GET only, skips auth'd
+ * requests) and the per-host semaphore for C3 politeness.
  */
 export async function scannerRequest(
   url: string,
   opts: ScannerRequestOptions = {}
 ): Promise<ScannerResponse | null> {
+  const parsed = new URL(url);
+  const isGet = (opts.method ?? "GET").toUpperCase() === "GET";
+
+  // Response cache: GET only, skip auth'd/custom requests
+  if (isGet) {
+    const skipCache = opts.headers &&
+      (opts.headers["authorization"] || opts.headers["cookie"] || opts.headers["origin"]);
+    if (!skipCache) {
+      const cached = cacheGet(url);
+      if (cached) {
+        return {
+          statusCode: cached.statusCode,
+          headers: { ...cached.headers },
+          body: cached.body,
+          setCookie: [...cached.setCookie],
+        };
+      }
+    }
+  }
+
+  // Per-host semaphore (C3: never exceed 3 concurrent requests to one host)
+  await acquireHostSlot(parsed.hostname);
+
   try {
     const res = await safeFetch(url, {
       method: opts.method ?? "GET",
@@ -66,6 +98,22 @@ export async function scannerRequest(
       maxBodyBytes: opts.maxBodyBytes,
     });
     const body = await res.text();
+
+    // Cache GET responses (skip error/non-cacheable status codes)
+    if (isGet && res.status !== 401 && res.status !== 403 && res.status !== 429) {
+      const cc = res.headers["cache-control"] || "";
+      const vary = res.headers["vary"] || "";
+      if (!cc.includes("no-store") && !cc.includes("private") && !vary.includes("*")) {
+        cacheSet(url, {
+          statusCode: res.status,
+          headers: res.headers,
+          body,
+          setCookie: res.setCookie,
+          ts: Date.now(),
+        });
+      }
+    }
+
     return {
       statusCode: res.status,
       headers: res.headers,
@@ -75,6 +123,8 @@ export async function scannerRequest(
   } catch (err) {
     if (opts.throwOnBlock && err instanceof SafeFetchError) throw err;
     return null;
+  } finally {
+    releaseHostSlot(parsed.hostname);
   }
 }
 

@@ -18,7 +18,9 @@ vi.mock("@/lib/supabase/admin", () => ({
     from: () => {
       const chain: Record<string, (...a: unknown[]) => unknown> = {};
       chain.select = vi.fn(() => chain);
-      chain.eq = vi.fn((col: string, val: string) => {
+      chain.eq = vi.fn((...a: unknown[]) => {
+        const col = a[0] as string;
+        const val = a[1];
         if (col === "eventId") state.queriedEventId = String(val);
         return chain;
       });
@@ -27,7 +29,8 @@ vi.mock("@/lib/supabase/admin", () => ({
           ? { eventId: state.queriedEventId }
           : null,
       }));
-      chain.upsert = vi.fn(async (row: { eventId: string }) => {
+      chain.upsert = vi.fn(async (...a: unknown[]) => {
+        const row = a[0] as { eventId: string };
         seen.add(row.eventId);
         return { error: null };
       });

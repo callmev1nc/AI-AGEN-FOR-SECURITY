@@ -1,24 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 /**
  * Light/dark theme toggle. Default is dark (no data-theme attr). The chosen
  * theme is persisted to localStorage and applied via an inline script in the
  * root layout (no flash on load). Dark is the default, so this is additive.
+ *
+ * The active theme is read with useSyncExternalStore (no setState-in-effect):
+ * getServerSnapshot returns "dark" to match the SSR/inline-script default, and
+ * the client snapshot reads the live data-theme attribute after hydration,
+ * which avoids a hydration mismatch.
  */
-export default function ThemeToggle() {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
-  }, []);
+const subscribeNoop = () => () => {};
+
+function getClientTheme(): "dark" | "light" {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+export default function ThemeToggle() {
+  const theme = useSyncExternalStore(subscribeNoop, getClientTheme, () => "dark");
 
   function toggle() {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
     if (next === "light") {
       document.documentElement.dataset.theme = "light";
     } else {
@@ -29,11 +34,6 @@ export default function ThemeToggle() {
     } catch {
       /* ignore (private mode etc.) */
     }
-  }
-
-  if (!mounted) {
-    // Stable placeholder avoids a hydration mismatch (server renders dark).
-    return <span className="inline-block h-[24px] w-[24px]" />;
   }
 
   return (

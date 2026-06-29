@@ -31,7 +31,7 @@ ${code.slice(0, 8000)}
   try {
     const response = await callClaude(
       [{ role: "user", content: userPrompt }],
-      { system: systemPrompt, maxTokens: 4096 }
+      { system: { text: systemPrompt, cache: true }, maxTokens: 4096 }
     );
 
     const jsonMatch = response.match(/\[[\s\S]*\]/);

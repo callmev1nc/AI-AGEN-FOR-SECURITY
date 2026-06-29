@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import type { VulnerabilityResult, Severity, ScannerEntry } from "@/lib/scanners/types";
 import { logger } from "@/lib/logger";
 import pLimit from "p-limit";
+import { runWithContext, initCache } from "@/lib/scanners/scan-context";
 
 import { scan as scanHeaders } from "@/lib/scanners/headers";
 import { scan as scanSsl } from "@/lib/scanners/ssl";
@@ -86,7 +87,7 @@ const SEVERITY_RANK: Record<Severity, number> = {
 export function dedupeFindings(findings: VulnerabilityResult[]): VulnerabilityResult[] {
   const map = new Map<string, VulnerabilityResult>();
   for (const finding of findings) {
-    const key = `${finding.category}${finding.affectedUrl}${finding.title}`;
+    const key = `${finding.category}|${finding.affectedUrl}|${finding.title}`;
     const existing = map.get(key);
     if (
       !existing ||
@@ -125,141 +126,155 @@ export async function runScanInline(params: {
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
-
   const startedAt = Date.now();
+  const cache = initCache();
 
-  const activeModules = SCANNER_MODULES.filter((m) => {
-    if (m.scanType !== scanType) return false;
-    if (scanLevel === "quick") return m.level === "quick";
-    if (scanLevel === "standard") return m.level === "quick" || m.level === "standard";
-    return true;
-  });
+  const ctx = { scanId, level: scanLevel, type: scanType, targetUrl, cache };
 
-  const totalModules = activeModules.length;
+  return runWithContext(ctx, async () => {
+    // Heartbeat: a durable worker writes this periodically so a reclaim job can
+    // detect scans stuck in "running" after a crash / forced redeploy.
+    const heartbeat = setInterval(() => {
+      void supabase
+        .from("scans")
+        .update({ heartbeatAt: new Date().toISOString() })
+        .eq("id", scanId);
+    }, 15_000);
+    try {
+      const activeModules = SCANNER_MODULES.filter((m) => {
+        if (m.scanType !== scanType) return false;
+        if (scanLevel === "quick") return m.level === "quick";
+        if (scanLevel === "standard") return m.level === "quick" || m.level === "standard";
+        return true;
+      });
 
-  await supabase
-    .from("scans")
-    .update({
-      status: "running",
-      startedAt: new Date().toISOString(),
-      progressPercent: 0,
-      modulesCompleted: 0,
-      totalModules,
-      currentModule: "Initializing scanners...",
-    })
-    .eq("id", scanId);
+      const totalModules = activeModules.length;
 
-  let completedCount = 0;
+      await supabase
+        .from("scans")
+        .update({
+          status: "running",
+          startedAt: new Date().toISOString(),
+          progressPercent: 0,
+          modulesCompleted: 0,
+          totalModules,
+          currentModule: "Initializing scanners...",
+        })
+        .eq("id", scanId);
 
-  async function updateProgress(moduleName: string, errorMsg?: string) {
-    completedCount++;
-    const percent = Math.round((completedCount / totalModules) * 100);
-    const update: Record<string, unknown> = {
-      progressPercent: percent,
-      modulesCompleted: completedCount,
-      totalModules,
-      currentModule: percent < 100 ? moduleName : "Finalizing results...",
-    };
-    if (errorMsg) {
-      update.errorMessage = errorMsg;
-    }
-    const { error } = await supabase.from("scans").update(update).eq("id", scanId);
-    if (error) {
-      logger.error("ScanRunner", `Failed to update progress: ${error.message}`);
-    }
-  }
+      let completedCount = 0;
 
-  // Cap concurrent scanners so a "deep" scan (13+ modules, each making many
-  // outbound requests) doesn't exhaust sockets or hammer the target.
-  const limit = pLimit(5);
-  const results = await Promise.allSettled(
-    activeModules.map((module) =>
-      limit(async () => {
-        try {
-          logger.info("ScanRunner", `Running scanner: ${module.name}`);
-          const moduleStart = Date.now();
-          const findings = await module.scan(targetUrl);
-          const elapsed = Date.now() - moduleStart;
-          logger.info("ScanRunner", `${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
-          await updateProgress(module.name);
-          return findings;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          logger.error("ScanRunner", `Scanner "${module.name}" failed: ${message}`);
-          await updateProgress(module.name, message);
-          return [] as VulnerabilityResult[];
+      async function updateProgress(moduleName: string, errorMsg?: string) {
+        completedCount++;
+        const percent = Math.round((completedCount / totalModules) * 100);
+        const update: Record<string, unknown> = {
+          progressPercent: percent,
+          modulesCompleted: completedCount,
+          totalModules,
+          currentModule: percent < 100 ? moduleName : "Finalizing results...",
+        };
+        if (errorMsg) {
+          update.errorMessage = errorMsg;
         }
-      })
-    )
-  );
-
-  const rawFindings: VulnerabilityResult[] = [];
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      rawFindings.push(...result.value);
-    }
-  }
-
-  const allFindings = dedupeFindings(rawFindings);
-  if (rawFindings.length !== allFindings.length) {
-    logger.info(
-      "ScanRunner",
-      `Deduplicated ${rawFindings.length} -> ${allFindings.length} findings`
-    );
-  }
-
-  const overallScore = calculateScore(allFindings);
-  const totalElapsed = Date.now() - startedAt;
-  logger.info("ScanRunner", `Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`);
-
-  if (allFindings.length > 0) {
-    const vulnerabilityRecords = allFindings.map((f) => ({
-      scanId,
-      severity: f.severity,
-      category: f.category,
-      title: f.title,
-      description: f.description,
-      evidence: f.evidence || null,
-      remediation: f.remediation,
-      cvssScore: f.cvssScore || null,
-      affectedUrl: f.affectedUrl,
-      // Stable hash (category|url|title) enables cross-scan dedup +
-      // ai_triage_cache lookups (see supabase-migration-wave1.sql).
-      findingHash: createHash("sha256").update(`${f.category}|${f.affectedUrl}|${f.title}`).digest("hex"),
-      suggestedFix: f.suggestedFix ?? null,
-      filePath: f.filePath ?? null,
-      lineStart: f.lineStart ?? null,
-      lineEnd: f.lineEnd ?? null,
-    }));
-
-    const batchSize = 50;
-    for (let i = 0; i < vulnerabilityRecords.length; i += batchSize) {
-      const batch = vulnerabilityRecords.slice(i, i + batchSize);
-      const { error: insertError } = await supabase
-        .from("vulnerabilities")
-        .insert(batch);
-
-      if (insertError) {
-        logger.error("ScanRunner", `Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}: ${insertError.message}`);
+        const { error } = await supabase.from("scans").update(update).eq("id", scanId);
+        if (error) {
+          logger.error("ScanRunner", `Failed to update progress: ${error.message}`);
+        }
       }
+
+      const concurrencyMap: Record<string, number> = { quick: 8, standard: 6, deep: 4 };
+      const limit = pLimit(concurrencyMap[scanLevel] ?? 5);
+      const results = await Promise.allSettled(
+        activeModules.map((module) =>
+          limit(async () => {
+            try {
+              logger.info("ScanRunner", `Running scanner: ${module.name}`);
+              const moduleStart = Date.now();
+              const findings = await module.scan(targetUrl);
+              const elapsed = Date.now() - moduleStart;
+              logger.info("ScanRunner", `${module.name}: found ${findings.length} issue(s) in ${formatDuration(elapsed)}`);
+              await updateProgress(module.name);
+              return findings;
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              logger.error("ScanRunner", `Scanner "${module.name}" failed: ${message}`);
+              await updateProgress(module.name, message);
+              return [] as VulnerabilityResult[];
+            }
+          })
+        )
+      );
+
+      const rawFindings: VulnerabilityResult[] = [];
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          rawFindings.push(...result.value);
+        }
+      }
+
+      const allFindings = dedupeFindings(rawFindings);
+      if (rawFindings.length !== allFindings.length) {
+        logger.info("ScanRunner", `Deduplicated ${rawFindings.length} -> ${allFindings.length} findings`);
+      }
+
+      const overallScore = calculateScore(allFindings);
+      const totalElapsed = Date.now() - startedAt;
+      logger.info("ScanRunner", `Scan ${scanId} complete in ${formatDuration(totalElapsed)}. ${allFindings.length} findings. Score: ${overallScore}`);
+
+      if (allFindings.length > 0) {
+        const vulnerabilityRecords = allFindings.map((f) => ({
+          scanId,
+          severity: f.severity,
+          category: f.category,
+          title: f.title,
+          description: f.description,
+          evidence: f.evidence || null,
+          remediation: f.remediation,
+          cvssScore: f.cvssScore || null,
+          affectedUrl: f.affectedUrl,
+          findingHash: createHash("sha256").update(`${f.category}|${f.affectedUrl}|${f.title}`).digest("hex"),
+          suggestedFix: f.suggestedFix ?? null,
+          filePath: f.filePath ?? null,
+          lineStart: f.lineStart ?? null,
+          lineEnd: f.lineEnd ?? null,
+        }));
+
+        const batchSize = 50;
+        for (let i = 0; i < vulnerabilityRecords.length; i += batchSize) {
+          const batch = vulnerabilityRecords.slice(i, i + batchSize);
+          const { error: insertError } = await supabase
+            .from("vulnerabilities")
+            .insert(batch);
+
+          if (insertError) {
+            logger.error("ScanRunner", `Failed to insert vulnerability batch ${Math.floor(i / batchSize) + 1}: ${insertError.message}`);
+          }
+        }
+      }
+
+      const { error: updateError } = await supabase
+        .from("scans")
+        .update({
+          status: "completed",
+          overallScore,
+          progressPercent: 100,
+          currentModule: "Scan complete",
+          completedAt: new Date().toISOString(),
+        })
+        .eq("id", scanId);
+
+      if (updateError) {
+        logger.error("ScanRunner", `Failed to update scan ${scanId}: ${updateError.message}`);
+        throw updateError;
+      }
+
+      logger.info("ScanRunner", `Scan ${scanId} saved successfully. Score: ${overallScore}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error("ScanRunner", `Scan ${scanId} failed: ${message}`);
+      await supabase.from("scans").update({ status: "failed", errorMessage: message }).eq("id", scanId);
+    } finally {
+      clearInterval(heartbeat);
     }
-  }
-
-  const { error: updateError } = await supabase
-    .from("scans")
-    .update({
-      status: "completed",
-      overallScore,
-      progressPercent: 100,
-      currentModule: "Scan complete",
-      completedAt: new Date().toISOString(),
-    })
-    .eq("id", scanId);
-
-  if (updateError) {
-    logger.error("ScanRunner", `Failed to update scan ${scanId}: ${updateError.message}`);
-    throw updateError;
-  }
-
-  logger.info("ScanRunner", `Scan ${scanId} saved successfully. Score: ${overallScore}`);
+  });
 }

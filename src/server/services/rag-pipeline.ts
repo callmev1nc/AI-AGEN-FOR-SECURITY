@@ -66,7 +66,7 @@ Guidelines:
   messages.push({ role: "user", content: question });
 
   const answer = await callClaude(messages, {
-    system: systemPrompt,
+    system: { text: systemPrompt, cache: true },
     maxTokens: 2048,
   });
 

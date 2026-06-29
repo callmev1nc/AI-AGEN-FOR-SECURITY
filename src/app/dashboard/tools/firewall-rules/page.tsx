@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ToolPageShell from "@/components/tools/ToolPageShell";
-import ToolResultsDisplay, { CodeBlock, CopyButton } from "@/components/tools/ToolResultsDisplay";
+import ToolResultsDisplay, { CodeBlock } from "@/components/tools/ToolResultsDisplay";
 import { trpcClient } from "@/lib/trpc-client";
 
 interface FirewallRule {

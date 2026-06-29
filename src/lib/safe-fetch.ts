@@ -22,6 +22,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import type { LookupAddress, LookupOptions } from "node:dns";
 import type { LookupFunction } from "net";
 import { logger } from "@/lib/logger";
+import { getPoolAgent } from "@/lib/safe-fetch-pool";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -78,7 +79,7 @@ function parseIpv4(str: string): Ipv4 | null {
 function parseIpv6(str: string): Ipv6 | null {
   const clean = str.trim();
   // Disallow embedded IPv4 dotted-quad shorthand for simplicity but still support it:
-  let address = clean;
+  const address = clean;
   // Handle "::" expansion.
   const halves = address.split("::");
   if (halves.length > 2) return null; // only one :: allowed
@@ -463,6 +464,7 @@ function doRequest(
       path,
       headers: reqHeaders,
       lookup,
+      agent: getPoolAgent(parsed.protocol, parsed.hostname, port, validatedIp),
       servername: isHttps ? parsed.hostname : undefined, // SNI
       // Scanners must reach targets with invalid/expired/self-signed certs
       // (that's exactly what ssl.ts reports). The SSRF guard runs before

@@ -186,7 +186,10 @@ function checkCertificate(ip: string, servername: string, port: number): Promise
         });
       }
     );
-    socket.on("error", () => resolve(null));
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(null);
+    });
     socket.setTimeout(8000, () => {
       socket.destroy();
       resolve(null);
@@ -208,7 +211,10 @@ function checkProtocols(ip: string, servername: string, port: number): Promise<P
         });
       }
     );
-    socket.on("error", () => resolve(null));
+    socket.on("error", () => {
+      socket.destroy();
+      resolve(null);
+    });
     socket.setTimeout(8000, () => {
       socket.destroy();
       resolve(null);

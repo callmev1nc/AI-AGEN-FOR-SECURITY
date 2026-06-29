@@ -81,7 +81,7 @@ export default function PricingPage() {
     try {
       const { url } = await trpcClient.billing.createCheckout.mutate({ priceId });
       if (url) {
-        window.location.href = url;
+        window.location.assign(url);
       } else {
         alert("Failed to start checkout. Please try again.");
       }

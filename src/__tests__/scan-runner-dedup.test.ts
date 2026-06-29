@@ -52,6 +52,16 @@ describe("dedupeFindings", () => {
     expect(out).toHaveLength(2);
   });
 
+  it("does not collide on ambiguous concatenation (delimiter safety)", () => {
+    // Without a delimiter these two findings share a key ("ABCD") and one
+    // would be wrongly dropped. The pipe delimiter keeps them distinct.
+    const out = dedupeFindings([
+      f("high", "A", "B", "CD"),
+      f("low", "AB", "C", "D"),
+    ]);
+    expect(out).toHaveLength(2);
+  });
+
   it("handles empty input", () => {
     expect(dedupeFindings([])).toEqual([]);
   });

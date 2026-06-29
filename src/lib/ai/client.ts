@@ -9,8 +9,15 @@ interface AnthropicMessage {
 
 interface AnthropicResponse {
   content: Array<{ text: string }>;
-  usage: { input_tokens: number; output_tokens: number };
+  usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
 }
+
+export interface CachedSystemPrompt {
+  text: string;
+  cache: true;
+}
+
+type SystemParam = string | CachedSystemPrompt;
 
 interface AnthropicClient {
   messages: {
@@ -18,7 +25,7 @@ interface AnthropicClient {
       model: string;
       max_tokens: number;
       messages: AnthropicMessage[];
-      system?: string;
+      system?: string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
     }) => Promise<AnthropicResponse>;
   };
 }
@@ -60,8 +67,24 @@ function getClient(): AnthropicClient {
 export interface AiCallOptions {
   model?: string;
   maxTokens?: number;
-  system?: string;
+  system?: SystemParam;
   retries?: number;
+}
+
+/**
+ * Only retry errors that can plausibly succeed on a subsequent attempt:
+ *  - HTTP 429 (rate limit) and any 5xx (incl. 529 "overloaded") from Anthropic.
+ *  - Non-HTTP failures (network / connection errors) — no status in the message.
+ * 4xx auth / validation / payload errors (400/401/403/413/…) are deterministic
+ * failures, so retrying them only wastes time and tokens.
+ */
+function isRetryableAiError(error: Error): boolean {
+  const match = error.message.match(/Anthropic API error \((\d+)\)/);
+  if (match) {
+    const status = Number(match[1]);
+    return status === 429 || (status >= 500 && status <= 599);
+  }
+  return true; // network / connection error
 }
 
 export async function callClaude(
@@ -80,22 +103,32 @@ export async function callClaude(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const client = getClient();
+      const systemParam = typeof system === "object" && system !== null && "cache" in system && system.cache
+        ? [{ type: "text" as const, text: system.text, cache_control: { type: "ephemeral" as const } }]
+        : typeof system === "string"
+          ? system
+          : undefined;
       const response = await client.messages.create({
         model,
         max_tokens: maxTokens,
         messages,
-        ...(system ? { system } : {}),
+        ...(systemParam !== undefined ? { system: systemParam } : {}),
       });
 
       const text = response.content.map((b) => b.text).join("");
-      logger.info("AiClient", `Claude response: ${response.usage.input_tokens} in / ${response.usage.output_tokens} out (attempt ${attempt + 1})`);
+      const cacheRead = response.usage.cache_read_input_tokens ?? 0;
+      const cacheCreate = response.usage.cache_creation_input_tokens ?? 0;
+      const cacheInfo = cacheRead || cacheCreate ? ` (cache read:${cacheRead} create:${cacheCreate})` : "";
+      logger.info("AiClient", `Claude response: ${response.usage.input_tokens} in / ${response.usage.output_tokens} out${cacheInfo} (attempt ${attempt + 1})`);
       return text;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       logger.error("AiClient", `Claude call failed (attempt ${attempt + 1}): ${lastError.message}`);
-      if (attempt < retries) {
+      if (attempt < retries && isRetryableAiError(lastError)) {
         const delay = Math.pow(2, attempt) * 1000;
         await new Promise((r) => setTimeout(r, delay));
+      } else {
+        break; // non-retryable error (e.g. 400/401/403) or retries exhausted
       }
     }
   }
