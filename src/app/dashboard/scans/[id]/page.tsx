@@ -345,9 +345,9 @@ export default function ScanResultsPage() {
   return (
     <div className="animate-fade-in-up space-y-8">
       <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
-        <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+        <Link href="/dashboard" className="hover:text-[var(--text-primary)] transition-colors">Dashboard</Link>
         <span>/</span>
-        <Link href="/dashboard/scans/new" className="hover:text-white transition-colors">Scans</Link>
+        <Link href="/dashboard/scans/new" className="hover:text-[var(--text-primary)] transition-colors">Scans</Link>
         <span>/</span>
         <span className="text-[var(--text-secondary)]">Results</span>
       </div>
@@ -384,25 +384,25 @@ export default function ScanResultsPage() {
               }
             }}
             disabled={exporting}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)] disabled:opacity-50"
           >
             {exporting ? "Exporting..." : "Export PDF"}
           </button>
           <button
             onClick={() => exportScanJson(scan)}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)]"
           >
             Export JSON
           </button>
           <button
             onClick={() => exportScanCsv(scan)}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)]"
           >
             Export CSV
           </button>
           <button
             onClick={() => exportScanSarif(scan)}
-            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white"
+            className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)]"
           >
             Export SARIF
           </button>
@@ -522,7 +522,7 @@ export default function ScanResultsPage() {
                   className={`rounded-md px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider transition-colors ${
                     sevFilter === sev
                       ? "bg-[var(--accent-dim)] text-[var(--accent)]"
-                      : "border border-[var(--border)] text-[var(--text-muted)] hover:text-white"
+                      : "border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   }`}
                 >
                   {sev === "all" ? "All" : sev}
@@ -597,7 +597,7 @@ export default function ScanResultsPage() {
             {aiReport && (
               <button
                 onClick={() => setAiReport(null)}
-                className="text-xs text-[var(--text-muted)] hover:text-white transition-colors"
+                className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               >
                 Close
               </button>
@@ -619,7 +619,7 @@ export default function ScanResultsPage() {
               Exploit-Chain Analysis
             </h2>
             {exploitChain && (
-              <button onClick={() => setExploitChain(null)} className="text-xs text-[var(--text-muted)] hover:text-white transition-colors">
+              <button onClick={() => setExploitChain(null)} className="text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
                 Close
               </button>
             )}

@@ -24,6 +24,37 @@
   --info-dim: #8b5cf633;
 }
 
+:root {
+  color-scheme: dark;
+}
+
+/* Light theme is OPT-IN via data-theme="light" on <html>. Default (no attr or
+   "dark") keeps the existing dark palette unchanged. */
+[data-theme="light"] {
+  color-scheme: light;
+  --bg-primary: #f4f6f9;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #eef2f7;
+  --border: #e2e8f0;
+  --border-glow: #10b98140;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent: #059669;
+  --accent-dim: #0596691a;
+  --critical: #dc2626;
+  --critical-dim: #dc26261a;
+  --high: #ea580c;
+  --high-dim: #ea580c1a;
+  --medium: #d97706;
+  --medium-dim: #d977061a;
+  --low: #2563eb;
+  --low-dim: #2563eb1a;
+  --info: #7c3aed;
+  --info-dim: #7c3aed1a;
+}
+
 @theme inline {
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);

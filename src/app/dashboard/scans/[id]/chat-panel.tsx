@@ -67,7 +67,7 @@ export default function ChatPanel({ scanId }: Props) {
     <div className="border-t border-[var(--border)]">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between p-4 text-sm text-[var(--text-secondary)] hover:text-white transition-colors"
+        className="flex w-full items-center justify-between p-4 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
       >
         <span className="font-medium">Security Chat</span>
         <svg
@@ -128,7 +128,7 @@ export default function ChatPanel({ scanId }: Props) {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask about a vulnerability..."
               disabled={loading}
-              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm text-white placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+              className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
             />
             <button
               type="submit"

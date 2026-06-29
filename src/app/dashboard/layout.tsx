@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const navItems = [
   {
@@ -135,7 +136,7 @@ export default function DashboardLayout({
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                     isActive
                       ? "bg-[var(--accent-dim)] text-[var(--accent)] font-medium"
-                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-white"
+                      : "text-[var(--text-secondary)] hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                   }`}
                 >
                   {item.icon}
@@ -157,9 +158,10 @@ export default function DashboardLayout({
                   {userEmail}
                 </div>
               </div>
+              <ThemeToggle />
               <button
                 onClick={handleSignOut}
-                className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-white"
+                className="rounded-lg p-1.5 text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                 title="Sign out"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -182,6 +184,7 @@ export default function DashboardLayout({
             SecureScan
           </span>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {navItems.map((item) => (
               <Link
                 key={item.href}

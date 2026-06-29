@@ -59,7 +59,7 @@ export default function FirewallRulesPage() {
             placeholder="Describe your firewall needs in plain English...&#10;&#10;Example: Allow HTTPS traffic from the internet to my web server at 10.0.0.1, allow SSH only from the office IP 203.0.113.5, block all other inbound traffic."
             maxLength={5000}
             rows={6}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-white placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
             disabled={loading}
           />
         </div>

@@ -96,7 +96,7 @@ export default function PayloadGeneratorPage() {
             placeholder="Describe the endpoint to test...&#10;&#10;Example: POST /api/users/login with JSON body { username, password } returns a JWT token"
             maxLength={5000}
             rows={4}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-white placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
             disabled={loading}
           />
         </div>

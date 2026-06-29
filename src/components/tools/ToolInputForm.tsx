@@ -38,7 +38,7 @@ export default function ToolInputForm({
           placeholder={placeholder}
           maxLength={maxLength}
           rows={rows}
-          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-white placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y"
           disabled={loading}
         />
         <p className="mt-1 text-xs text-[var(--text-muted)]">

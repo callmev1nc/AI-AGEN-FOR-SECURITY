@@ -238,7 +238,7 @@ export default function NewScanPage() {
       {/* Header */}
       <div>
         <div className="mb-2 flex items-center gap-2 text-sm text-[var(--text-muted)]">
-          <Link href="/dashboard" className="hover:text-white transition-colors">
+          <Link href="/dashboard" className="hover:text-[var(--text-primary)] transition-colors">
             Dashboard
           </Link>
           <span>/</span>
@@ -277,7 +277,7 @@ export default function NewScanPage() {
               onChange={(e) => setUrl(e.target.value)}
               required
               placeholder="https://example.com"
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] py-3.5 pl-11 pr-4 text-sm text-white placeholder:text-[var(--text-muted)] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-dim)] font-[family-name:var(--font-jetbrains)]"
+              className="w-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] py-3.5 pl-11 pr-4 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-all focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-dim)] font-[family-name:var(--font-jetbrains)]"
             />
           </div>
           {error && (
@@ -392,7 +392,7 @@ export default function NewScanPage() {
           </button>
           <Link
             href="/dashboard"
-            className="text-sm text-[var(--text-muted)] transition-colors hover:text-white"
+            className="text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
           >
             Cancel
           </Link>

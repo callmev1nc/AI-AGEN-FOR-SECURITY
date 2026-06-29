@@ -105,7 +105,7 @@ export default function SettingsPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-white placeholder:text-[var(--text-muted)] outline-none transition-colors focus:border-[var(--accent)]"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none transition-colors focus:border-[var(--accent)]"
               placeholder="Your name"
             />
           </div>
@@ -117,7 +117,7 @@ export default function SettingsPage() {
               type="email"
               value={email}
               disabled
-              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-white opacity-60 outline-none"
+              className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 py-2.5 text-sm text-[var(--text-primary)] opacity-60 outline-none"
             />
             <p className="mt-1 text-xs text-[var(--text-muted)]">
               Contact support to change your email address.
@@ -149,7 +149,7 @@ export default function SettingsPage() {
           <h2 className="text-sm font-medium uppercase tracking-wider text-[var(--text-muted)]">
             API Keys
           </h2>
-          <button className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white">
+          <button className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)]">
             Generate New Key
           </button>
         </div>
@@ -200,7 +200,7 @@ export default function SettingsPage() {
                 }
               }}
               disabled={portalLoading}
-              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-white disabled:opacity-50"
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--accent-dim)] hover:text-[var(--text-primary)] disabled:opacity-50"
             >
               {portalLoading ? "Loading..." : "Manage Billing"}
             </button>
